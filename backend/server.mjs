@@ -4,14 +4,15 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const ROOT_DIR = path.resolve(__dirname, '..');
 const PORT = process.env.PORT || 8080;
 
 // Directories
 const DIRS = {
-  mediaPhotos: path.join(__dirname, 'media', 'photos'),
-  mediaVideos: path.join(__dirname, 'media', 'videos'),
-  mediaThumbs: path.join(__dirname, 'media', 'thumbnails'),
-  backendData: path.join(__dirname, 'backend', 'data')
+  mediaPhotos: path.join(ROOT_DIR, 'media', 'photos'),
+  mediaVideos: path.join(ROOT_DIR, 'media', 'videos'),
+  mediaThumbs: path.join(ROOT_DIR, 'media', 'thumbnails'),
+  backendData: path.join(__dirname, 'data')
 };
 
 // Ensure all directories exist
@@ -262,7 +263,7 @@ const server = http.createServer({ maxHeaderSize: 1048576 }, (req, res) => {
   // --------------------------------------------------------------------------
   if (pathname.startsWith('/media/')) {
     const relPath = pathname.replace('/media/', '');
-    const fullPath = path.join(__dirname, 'media', relPath);
+    const fullPath = path.join(ROOT_DIR, 'media', relPath);
 
     if (!fs.existsSync(fullPath) || fs.statSync(fullPath).isDirectory()) {
       res.writeHead(404, { 'Content-Type': 'text/plain' });
@@ -313,7 +314,7 @@ const server = http.createServer({ maxHeaderSize: 1048576 }, (req, res) => {
     reqPath = '/index.html';
   }
 
-  const filePath = path.join(__dirname, reqPath);
+  const filePath = path.join(ROOT_DIR, reqPath);
   const ext = path.extname(filePath).toLowerCase();
   const contentType = MIME_TYPES[ext] || 'application/octet-stream';
 
