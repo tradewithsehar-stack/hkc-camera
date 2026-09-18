@@ -373,6 +373,9 @@
            ZONE 3: QUICK CONTROLS & MODES (Dedicated Non-Overlapping Rows)
            =================================================================== -->
       <section class="camera-zone-controls" aria-label="Camera controls and modes">
+        <!-- Live Floating Zoom Badge -->
+        <div id="zoom-live-badge" class="zoom-live-badge" aria-live="polite">1.0×</div>
+
         <!-- Row 3A: Dedicated Horizontal Zoom Row (Never overlaps shutter or presets) -->
         <div class="horizontal-scroll-row zoom-scroll-row" id="zoom-control-bar" aria-label="Camera Zoom Levels">
           <button type="button" class="zoom-chip" data-zoom="0.5">0.5×</button>
@@ -380,7 +383,8 @@
           <button type="button" class="zoom-chip" data-zoom="2">2×</button>
           <button type="button" class="zoom-chip" data-zoom="3">3×</button>
           <button type="button" class="zoom-chip" data-zoom="5">5×</button>
-          <span id="zoom-type-badge" class="zoom-type-badge">OPTICAL</span>
+          <button type="button" class="zoom-chip" data-zoom="10">10×</button>
+          <span id="zoom-type-badge" class="zoom-type-badge">1.0×</span>
         </div>
 
         <!-- Row 3B: Dedicated Horizontal Presets Row (Never wraps into multiple lines) -->
@@ -395,8 +399,8 @@
 
         <!-- Row 3C: Dedicated Horizontal Camera Modes Row (Never sits over shutter) -->
         <div class="horizontal-scroll-row modes-scroll-row" id="mode-ribbon" role="tablist" aria-label="Camera modes">
-          <button type="button" class="mode-item" data-mode="photo" role="tab" aria-selected="false">PHOTO</button>
-          <button type="button" class="mode-item active" data-mode="video" role="tab" aria-selected="true">VIDEO</button>
+          <button type="button" class="mode-item active" data-mode="photo" role="tab" aria-selected="true">PHOTO</button>
+          <button type="button" class="mode-item" data-mode="video" role="tab" aria-selected="false">VIDEO</button>
           <button type="button" class="mode-item" data-mode="pro" role="tab" aria-selected="false">PRO</button>
           <button type="button" class="mode-item" data-mode="portrait" role="tab" aria-selected="false">PORTRAIT</button>
           <button type="button" class="mode-item" data-mode="timelapse" role="tab" aria-selected="false">TIMELAPSE</button>
@@ -426,15 +430,18 @@
 
           <!-- Center: Main Shutter / Record Button -->
           <div class="shutter-col col-shutter">
-            <button type="button" id="btn-shutter" class="shutter-btn mode-video-shutter" aria-label="Capture photo or record video" title="Shutter">
+            <button type="button" id="btn-shutter" class="shutter-btn mode-photo-shutter" aria-label="Capture photo or record video" title="Shutter">
               <div class="shutter-ring">
                 <div class="shutter-inner"></div>
               </div>
             </button>
           </div>
 
-          <!-- Right: Camera Flip / Switch (Rear <-> Front) -->
+          <!-- Right: Camera Flip / Switch (Rear <-> Front) and In-Video Snap Button -->
           <div class="shutter-col col-switch">
+            <button type="button" id="btn-video-snap" class="video-snap-btn hidden" aria-label="Snap photo while recording" title="Snap Photo">
+              <div class="video-snap-inner"></div>
+            </button>
             <button type="button" id="btn-flip-camera" class="camera-action-btn switch-btn" aria-label="Switch between front and rear cameras" title="Switch Camera">
               <svg id="flip-icon" viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2">
                 <path d="M20 16v4a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h2"/>

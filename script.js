@@ -26,7 +26,7 @@
   const APP_STATE = {
     isLoggedIn: false,
     currentTab: 'camera', // 'camera' | 'gallery' | 'settings'
-    cameraMode: 'video',  // 'video' (Default for Reels) | 'photo' | 'pro' | 'portrait' | 'timelapse' | 'slowmo'
+    cameraMode: 'photo',  // 'photo' (Default) | 'video' | 'pro' | 'portrait' | 'timelapse' | 'slowmo'
     stream: null,
     activeTrack: null,
     facingMode: 'environment', // 'environment' | 'user'
@@ -40,6 +40,12 @@
     targetResolution: 1080, // 720, 1080, 2160
     targetFps: 30,          // 23, 24, 25, 30, 50, 60
     currentZoom: 1.0,
+    targetZoom: 1.0,
+    effectiveDigitalZoom: 1.0,
+    effectiveHwZoom: 1.0,
+    hwZoomSupported: false,
+    hwZoomMin: 1.0,
+    hwZoomMax: 1.0,
     isTorchOn: false,
     isNightMode: false,
     isGridOn: false,
@@ -162,6 +168,7 @@
     btnCameraSimulator: document.getElementById('btn-camera-simulator'),
 
     // Camera Zone 3: Quick Controls & Modes
+    zoomLiveBadge: document.getElementById('zoom-live-badge'),
     zoomControlBar: document.getElementById('zoom-control-bar'),
     zoomChips: document.querySelectorAll('.zoom-chip'),
     zoomTypeBadge: document.getElementById('zoom-type-badge'),
@@ -171,6 +178,7 @@
     // Camera Zone 4: Shutter Console
     btnShutter: document.getElementById('btn-shutter'),
     btnFlipCamera: document.getElementById('btn-flip-camera'),
+    btnVideoSnap: document.getElementById('btn-video-snap'),
     flipIcon: document.getElementById('flip-icon'),
     btnLastPhoto: document.getElementById('btn-last-photo'),
     thumbImgContainer: document.getElementById('thumb-img-container'),
@@ -819,6 +827,7 @@
         this.detectCapabilities();
         this.applyMirrorStyle();
         this.startLowLightMonitor();
+        if (window.ZoomEngine) ZoomEngine.applyHardwareAndTransform(APP_STATE.currentZoom);
       };
     },
 
@@ -870,9 +879,18 @@
       DOM.hudEv.textContent = (settings.exposureCompensation !== undefined) ? `${settings.exposureCompensation > 0 ? '+' : ''}${settings.exposureCompensation.toFixed(1)}` : '0.0';
       DOM.hudWb.textContent = settings.whiteBalanceMode ? settings.whiteBalanceMode.toUpperCase() : 'AUTO';
       DOM.hudFocus.textContent = settings.focusMode ? settings.focusMode.toUpperCase() : 'AF-C';
-      DOM.hudZoom.textContent = `${APP_STATE.currentZoom.toFixed(1)}×`;
+      DOM.hudZoom.textContent = (APP_STATE.currentZoom >= 9.95) ? '10×' : `${APP_STATE.currentZoom.toFixed(1)}×`;
 
-      // 4. Torch availability
+      // 4. Zoom capabilities
+      if (capabilities.zoom) {
+        APP_STATE.hwZoomSupported = true;
+        APP_STATE.hwZoomMin = capabilities.zoom.min || 1;
+        APP_STATE.hwZoomMax = capabilities.zoom.max || 1;
+      } else {
+        APP_STATE.hwZoomSupported = false;
+      }
+
+      // 5. Torch availability
       if (capabilities.torch) {
         DOM.btnFlash.removeAttribute('disabled');
       } else {
@@ -933,30 +951,14 @@
       } else {
         DOM.cameraVideo.classList.remove('mirrored');
       }
+      if (window.ZoomEngine) ZoomEngine.applyHardwareAndTransform(APP_STATE.currentZoom);
     },
 
     async setZoom(level) {
-      APP_STATE.currentZoom = parseFloat(level);
-      DOM.zoomChips.forEach(c => {
-        c.classList.toggle('active', parseFloat(c.dataset.zoom) === APP_STATE.currentZoom);
-      });
-      DOM.hudZoom.textContent = `${APP_STATE.currentZoom.toFixed(1)}×`;
-
-      if (!APP_STATE.activeTrack) return;
-      const capabilities = APP_STATE.activeTrack.getCapabilities ? APP_STATE.activeTrack.getCapabilities() : {};
-
-      if (capabilities.zoom && capabilities.zoom.max >= APP_STATE.currentZoom) {
-        // Hardware optical/sensor zoom
-        if (DOM.zoomTypeBadge) DOM.zoomTypeBadge.textContent = 'OPTICAL';
-        try {
-          await APP_STATE.activeTrack.applyConstraints({
-            advanced: [{ zoom: APP_STATE.currentZoom }]
-          });
-        } catch (_) {}
+      if (window.ZoomEngine) {
+        ZoomEngine.animateTo(parseFloat(level));
       } else {
-        // Digital zoom fallback (smooth CSS zoom on viewfinder)
-        if (DOM.zoomTypeBadge) DOM.zoomTypeBadge.textContent = 'DIGITAL';
-        DOM.cameraVideo.style.transform = `${DOM.cameraVideo.classList.contains('mirrored') ? 'scaleX(-1) ' : ''}scale(${APP_STATE.currentZoom})`;
+        APP_STATE.currentZoom = parseFloat(level);
       }
     },
 
@@ -1153,7 +1155,253 @@
   };
 
   // --------------------------------------------------------------------------
-  // 8. Aspect Ratio Framing System
+  // 8. iPhone-Style Smooth Zoom Engine (0.5x - 10.0x with Gestures & Hardware Fallback)
+  // --------------------------------------------------------------------------
+  const ZoomEngine = {
+    rafId: null,
+    liveBadgeTimeout: null,
+    isPinching: false,
+    pinchStartDistance: 0,
+    pinchStartZoom: 1.0,
+    lastTapTime: 0,
+    tapTimer: null,
+
+    init() {
+      this.bindChips();
+      this.bindGestures();
+      this.applyZoom(APP_STATE.currentZoom, false);
+    },
+
+    bindChips() {
+      if (!DOM.zoomChips) return;
+      DOM.zoomChips.forEach(chip => {
+        chip.addEventListener('click', (e) => {
+          e.stopPropagation();
+          const target = parseFloat(chip.dataset.zoom);
+          if (!isNaN(target)) {
+            this.animateTo(target, 280);
+          }
+        });
+      });
+    },
+
+    bindGestures() {
+      const stage = DOM.cameraStage;
+      if (!stage) return;
+
+      // 1. Two-finger Pinch to Zoom
+      stage.addEventListener('touchstart', (e) => {
+        if (e.touches.length === 2) {
+          this.isPinching = true;
+          this.cancelAnimation();
+          const p1 = e.touches[0];
+          const p2 = e.touches[1];
+          this.pinchStartDistance = Math.hypot(p2.clientX - p1.clientX, p2.clientY - p1.clientY);
+          this.pinchStartZoom = APP_STATE.currentZoom;
+          if (this.tapTimer) {
+            clearTimeout(this.tapTimer);
+            this.tapTimer = null;
+          }
+        }
+      }, { passive: true });
+
+      stage.addEventListener('touchmove', (e) => {
+        if (this.isPinching && e.touches.length === 2) {
+          const p1 = e.touches[0];
+          const p2 = e.touches[1];
+          const curDist = Math.hypot(p2.clientX - p1.clientX, p2.clientY - p1.clientY);
+          if (this.pinchStartDistance > 10) {
+            const scale = curDist / this.pinchStartDistance;
+            const newZoom = Math.min(10.0, Math.max(0.5, this.pinchStartZoom * scale));
+            this.applyZoom(newZoom, true);
+          }
+        }
+      }, { passive: true });
+
+      stage.addEventListener('touchend', (e) => {
+        if (e.touches.length < 2) {
+          this.isPinching = false;
+        }
+      }, { passive: true });
+
+      // 2. Double-tap (1x <-> 2x) & Tap-to-Focus Reticle
+      stage.addEventListener('click', (e) => {
+        // Prevent interfering when user touches control bars or alerts
+        if (e.target.closest('.zoom-control-bar') ||
+            e.target.closest('.camera-zone-controls') ||
+            e.target.closest('.camera-zone-top') ||
+            e.target.closest('.camera-zone-shutter') ||
+            e.target.closest('.low-light-alert-card') ||
+            e.target.closest('.camera-fallback-card')) {
+          return;
+        }
+
+        const now = Date.now();
+        const timeDiff = now - this.lastTapTime;
+        this.lastTapTime = now;
+
+        if (timeDiff < 320 && timeDiff > 40) {
+          // Double-tap detected: smooth toggle 1x <-> 2x
+          if (this.tapTimer) {
+            clearTimeout(this.tapTimer);
+            this.tapTimer = null;
+          }
+          const nextZoom = APP_STATE.currentZoom >= 1.8 ? 1.0 : 2.0;
+          this.animateTo(nextZoom, 260);
+        } else {
+          // Single tap: tap-to-focus animation + dismiss bottom sheets
+          const rect = stage.getBoundingClientRect();
+          const x = e.clientX - rect.left;
+          const y = e.clientY - rect.top;
+
+          this.tapTimer = setTimeout(() => {
+            this.showFocusReticle(x, y);
+            closeAllBottomSheets();
+          }, 240);
+        }
+      });
+    },
+
+    showFocusReticle(x, y) {
+      if (!DOM.focusReticle) return;
+      DOM.focusReticle.style.left = `${x}px`;
+      DOM.focusReticle.style.top = `${y}px`;
+      DOM.focusReticle.classList.add('active');
+      setTimeout(() => {
+        if (DOM.focusReticle) DOM.focusReticle.classList.remove('active');
+      }, 850);
+    },
+
+    cancelAnimation() {
+      if (this.rafId) {
+        cancelAnimationFrame(this.rafId);
+        this.rafId = null;
+      }
+    },
+
+    animateTo(targetZoom, duration = 300) {
+      targetZoom = Math.min(10.0, Math.max(0.5, targetZoom));
+      const startZoom = APP_STATE.currentZoom;
+      if (Math.abs(startZoom - targetZoom) < 0.02) {
+        this.applyZoom(targetZoom, false);
+        return;
+      }
+
+      this.cancelAnimation();
+      const startTime = performance.now();
+
+      // iPhone-style cubic easing: smooth ease-out curve
+      const step = (now) => {
+        const elapsed = now - startTime;
+        const progress = Math.min(1, elapsed / duration);
+        const ease = 1 - Math.pow(1 - progress, 3);
+        const current = startZoom + (targetZoom - startZoom) * ease;
+
+        this.applyZoom(current, false);
+
+        if (progress < 1) {
+          this.rafId = requestAnimationFrame(step);
+        } else {
+          this.applyZoom(targetZoom, false);
+          this.rafId = null;
+        }
+      };
+
+      this.rafId = requestAnimationFrame(step);
+    },
+
+    applyZoom(zoomValue, isGesture = false) {
+      zoomValue = Math.min(10.0, Math.max(0.5, zoomValue));
+      APP_STATE.currentZoom = zoomValue;
+
+      // Clean formatted text: "1.0×" or "10×"
+      const formatted = (zoomValue >= 9.95) ? '10×' : `${zoomValue.toFixed(1)}×`;
+
+      // Update HUD telemetry
+      if (DOM.hudZoom) DOM.hudZoom.textContent = formatted;
+      if (DOM.zoomTypeBadge) DOM.zoomTypeBadge.textContent = formatted;
+
+      // Update live floating badge
+      if (DOM.zoomLiveBadge) {
+        DOM.zoomLiveBadge.textContent = formatted;
+        DOM.zoomLiveBadge.classList.add('active');
+        if (this.liveBadgeTimeout) clearTimeout(this.liveBadgeTimeout);
+        this.liveBadgeTimeout = setTimeout(() => {
+          if (DOM.zoomLiveBadge) DOM.zoomLiveBadge.classList.remove('active');
+        }, 1400);
+      }
+
+      // Update active chip highlight
+      if (DOM.zoomChips) {
+        DOM.zoomChips.forEach(chip => {
+          const chipZ = parseFloat(chip.dataset.zoom);
+          const isMatch = Math.abs(chipZ - zoomValue) < 0.12;
+          chip.classList.toggle('active', isMatch);
+        });
+      }
+
+      // Apply hardware constraints and/or GPU scale
+      this.applyHardwareAndTransform(zoomValue);
+    },
+
+    async applyHardwareAndTransform(zoomValue) {
+      let hwZoom = 1.0;
+      let digitalZoom = zoomValue;
+
+      if (APP_STATE.activeTrack) {
+        const caps = APP_STATE.activeTrack.getCapabilities ? APP_STATE.activeTrack.getCapabilities() : {};
+        if (caps.zoom) {
+          APP_STATE.hwZoomSupported = true;
+          const minZ = caps.zoom.min || 1;
+          const maxZ = caps.zoom.max || 1;
+
+          if (zoomValue >= minZ && zoomValue <= maxZ) {
+            hwZoom = zoomValue;
+            digitalZoom = 1.0;
+          } else if (zoomValue > maxZ) {
+            hwZoom = maxZ;
+            digitalZoom = zoomValue / maxZ;
+          } else {
+            hwZoom = minZ;
+            digitalZoom = zoomValue / minZ;
+          }
+
+          try {
+            await APP_STATE.activeTrack.applyConstraints({
+              advanced: [{ zoom: hwZoom }]
+            });
+          } catch (_) {}
+        }
+      }
+
+      APP_STATE.effectiveHwZoom = hwZoom;
+      APP_STATE.effectiveDigitalZoom = digitalZoom;
+
+      // Update badge label (OPTICAL vs DIGITAL vs HYBRID)
+      if (DOM.zoomTypeBadge) {
+        if (hwZoom > 1.05 && digitalZoom > 1.05) {
+          DOM.zoomTypeBadge.textContent = `${(zoomValue >= 9.95 ? '10' : zoomValue.toFixed(1))}× HYBRID`;
+        } else if (hwZoom > 1.05) {
+          DOM.zoomTypeBadge.textContent = `${(zoomValue >= 9.95 ? '10' : zoomValue.toFixed(1))}× OPTICAL`;
+        } else {
+          DOM.zoomTypeBadge.textContent = `${(zoomValue >= 9.95 ? '10' : zoomValue.toFixed(1))}× DIGITAL`;
+        }
+      }
+
+      // GPU Transform on video viewport
+      if (DOM.cameraVideo) {
+        const isMirrored = DOM.cameraVideo.classList.contains('mirrored');
+        const mirrorPrefix = isMirrored ? 'scaleX(-1) ' : '';
+        DOM.cameraVideo.style.transform = `${mirrorPrefix}scale(${digitalZoom})`;
+      }
+    }
+  };
+
+  // Expose to window for seamless cross-module access
+  window.ZoomEngine = ZoomEngine;
+
+  // --------------------------------------------------------------------------
+  // 9. Aspect Ratio Framing System
   // --------------------------------------------------------------------------
   const AspectRatioManager = {
     setRatio(ratioStr) {
@@ -1346,6 +1594,8 @@
         DOM.videoHud.classList.remove('hidden');
         DOM.btnShutter.classList.add('recording');
         DOM.videoTimer.textContent = '00:00';
+        if (DOM.btnVideoSnap) DOM.btnVideoSnap.classList.remove('hidden');
+        if (DOM.btnFlipCamera) DOM.btnFlipCamera.classList.add('hidden');
 
         APP_STATE.videoTimerInterval = setInterval(() => {
           const elapsedSec = Math.floor((Date.now() - APP_STATE.videoStartTime) / 1000);
@@ -1368,6 +1618,8 @@
         clearInterval(APP_STATE.videoTimerInterval);
         DOM.videoHud.classList.add('hidden');
         DOM.btnShutter.classList.remove('recording');
+        if (DOM.btnVideoSnap) DOM.btnVideoSnap.classList.add('hidden');
+        if (DOM.btnFlipCamera) DOM.btnFlipCamera.classList.remove('hidden');
       }
     },
 
@@ -1574,7 +1826,14 @@
           ctx.scale(-1, 1);
         }
 
-        ctx.drawImage(video, 0, 0, nativeWidth, nativeHeight);
+        // Apply crop if digital zoom is active to match the exact viewfinder framing
+        const cropZoom = Math.max(1.0, APP_STATE.effectiveDigitalZoom || 1.0);
+        const sw = nativeWidth / cropZoom;
+        const sh = nativeHeight / cropZoom;
+        const sx = (nativeWidth - sw) / 2;
+        const sy = (nativeHeight - sh) / 2;
+
+        ctx.drawImage(video, sx, sy, sw, sh, 0, 0, nativeWidth, nativeHeight);
 
         const quality = APP_STATE.photoQuality || 0.95;
         const originalBlob = await new Promise(resolve => canvas.toBlob(b => resolve(b), 'image/jpeg', quality));
@@ -2542,13 +2801,13 @@
       DOM.btnCameraSimulator.addEventListener('click', () => CameraEngine.startSimulatorStream());
     }
 
-    // Dismiss bottom sheets when tapping camera stage
-    DOM.cameraStage.addEventListener('click', (e) => {
-      if (e.target.closest('.zoom-control-bar') || e.target.closest('.low-light-alert-card') || e.target.closest('.camera-fallback-card')) {
-        return;
-      }
-      closeAllBottomSheets();
-    });
+    // In-Video Snapshot Button (Take photo while recording video)
+    if (DOM.btnVideoSnap) {
+      DOM.btnVideoSnap.addEventListener('click', (e) => {
+        e.stopPropagation();
+        CaptureEngine.executePhotoCapture();
+      });
+    }
 
     // Last Photo Thumbnail Button
     DOM.btnLastPhoto.addEventListener('click', async () => {
@@ -2560,12 +2819,8 @@
       }
     });
 
-    // Floating Zoom Chips
-    DOM.zoomChips.forEach(chip => {
-      chip.addEventListener('click', () => {
-        CameraEngine.setZoom(chip.dataset.zoom);
-      });
-    });
+    // Initialize iPhone-Style Zoom & Gestures Engine
+    ZoomEngine.init();
 
     // Low Light Assist Actions
     DOM.btnApplyNightAssist.addEventListener('click', () => {
@@ -2815,8 +3070,8 @@
     setupEventListeners();
     AuthManager.init();
 
-    // Set default Reels preset on boot
-    applyPreset('reels');
+    // Set default Photo mode on boot with full-screen 9:16 vertical viewfinder
+    switchCameraMode('photo');
 
     // Fetch and sync central cloud vault
     RemoteStorageEngine.fetchCentralMedia();
