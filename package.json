@@ -4,7 +4,7 @@
   "description": "HKC CAMERA - Professional Mobile-First Camera Studio & Reels PWA",
   "type": "module",
   "scripts": {
-    "build": "echo 'Static assets ready'",
+    "build": "node build.js",
     "start": "node backend/server.mjs",
     "dev": "node backend/server.mjs"
   },
