@@ -1,0 +1,42 @@
+# Dependencies
+node_modules/
+package-lock.json
+
+# Vercel deployment cache
+.vercel/
+
+# Environment variables
+.env
+.env.local
+.env.*.local
+
+# Operating system files
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+.DS_Store
+.DS_Store?
+._*
+
+# IDE & Editor files
+.vscode/
+.idea/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+
+# Local media recordings (preserve directories via .gitkeep)
+media/photos/*
+!media/photos/.gitkeep
+media/videos/*
+!media/videos/.gitkeep
+media/thumbnails/*
+!media/thumbnails/.gitkeep
+
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*

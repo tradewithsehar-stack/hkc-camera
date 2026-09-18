@@ -1,0 +1,25 @@
+{
+  "name": "hkc-camera",
+  "version": "2.0.0",
+  "description": "HKC CAMERA - Professional Mobile-First Camera Studio & Reels PWA",
+  "type": "module",
+  "main": "server.mjs",
+  "scripts": {
+    "start": "node server.mjs",
+    "dev": "node server.mjs",
+    "build": "echo 'Build complete - static PWA ready for deployment'"
+  },
+  "keywords": [
+    "camera",
+    "pwa",
+    "reels",
+    "video-recorder",
+    "indexeddb",
+    "vercel"
+  ],
+  "author": "tradewithsehar-stack",
+  "license": "MIT",
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}
