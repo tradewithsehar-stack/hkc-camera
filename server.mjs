@@ -4,36 +4,41 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const ROOT_DIR = path.resolve(__dirname, '..');
 const PORT = process.env.PORT || 8080;
 
 // Directories
 const DIRS = {
-  mediaPhotos: path.join(ROOT_DIR, 'media', 'photos'),
-  mediaVideos: path.join(ROOT_DIR, 'media', 'videos'),
-  mediaThumbs: path.join(ROOT_DIR, 'media', 'thumbnails'),
-  backendData: path.join(__dirname, 'data')
+  mediaPhotos: path.join(__dirname, 'media', 'photos'),
+  mediaVideos: path.join(__dirname, 'media', 'videos'),
+  mediaThumbs: path.join(__dirname, 'media', 'thumbnails'),
+  backendData: path.join(__dirname, 'backend', 'data')
 };
 
-// Ensure all directories exist
-for (const dir of Object.values(DIRS)) {
-  if (!fs.existsSync(dir)) {
-    fs.mkdirSync(dir, { recursive: true });
+// Ensure all directories exist (safely ignore errors on read-only environments like Vercel)
+try {
+  for (const dir of Object.values(DIRS)) {
+    if (!fs.existsSync(dir)) {
+      fs.mkdirSync(dir, { recursive: true });
+    }
   }
-}
+} catch (_) {}
 
 const COUNTER_FILE = path.join(DIRS.backendData, 'counter.json');
 const MEDIA_INDEX_FILE = path.join(DIRS.backendData, 'media-index.json');
 
 // Initialize counter file if missing
-if (!fs.existsSync(COUNTER_FILE)) {
-  fs.writeFileSync(COUNTER_FILE, JSON.stringify({ current: 0 }, null, 2));
-}
+try {
+  if (!fs.existsSync(COUNTER_FILE)) {
+    fs.writeFileSync(COUNTER_FILE, JSON.stringify({ current: 0 }, null, 2));
+  }
+} catch (_) {}
 
 // Initialize media index file if missing
-if (!fs.existsSync(MEDIA_INDEX_FILE)) {
-  fs.writeFileSync(MEDIA_INDEX_FILE, JSON.stringify([], null, 2));
-}
+try {
+  if (!fs.existsSync(MEDIA_INDEX_FILE)) {
+    fs.writeFileSync(MEDIA_INDEX_FILE, JSON.stringify([], null, 2));
+  }
+} catch (_) {}
 
 function getNextCounter(ext = 'jpg') {
   let counterData = { current: 0 };
@@ -43,7 +48,9 @@ function getNextCounter(ext = 'jpg') {
   } catch (_) {}
 
   counterData.current = (counterData.current || 0) + 1;
-  fs.writeFileSync(COUNTER_FILE, JSON.stringify(counterData, null, 2));
+  try {
+    fs.writeFileSync(COUNTER_FILE, JSON.stringify(counterData, null, 2));
+  } catch (_) {}
 
   const cleanExt = ext.replace(/^\./, '').toLowerCase();
   const numStr = String(counterData.current).padStart(4, '0');
@@ -66,7 +73,9 @@ function getMediaIndex() {
 }
 
 function saveMediaIndex(items) {
-  fs.writeFileSync(MEDIA_INDEX_FILE, JSON.stringify(items, null, 2));
+  try {
+    fs.writeFileSync(MEDIA_INDEX_FILE, JSON.stringify(items, null, 2));
+  } catch (_) {}
 }
 
 const MIME_TYPES = {
@@ -92,6 +101,19 @@ function sendJson(res, statusCode, data) {
     'Access-Control-Allow-Headers': '*'
   });
   res.end(JSON.stringify(data));
+}
+
+// Ensure Vercel NFT (Node File Trace) bundles all static assets into serverless bundle
+if (false) {
+  path.join(__dirname, 'style.css');
+  path.join(__dirname, 'script.js');
+  path.join(__dirname, 'sw.js');
+  path.join(__dirname, 'manifest.json');
+  path.join(__dirname, 'index.html');
+  path.join(__dirname, 'icons', 'camera-icon.svg');
+  path.join(__dirname, 'icons', 'favicon.png');
+  path.join(__dirname, 'icons', 'icon-192.png');
+  path.join(__dirname, 'icons', 'icon-512.png');
 }
 
 const server = http.createServer({ maxHeaderSize: 1048576 }, (req, res) => {
@@ -140,7 +162,6 @@ const server = http.createServer({ maxHeaderSize: 1048576 }, (req, res) => {
   // 3. Central Media Library Index
   if (pathname === '/api/media' && req.method === 'GET') {
     const items = getMediaIndex();
-    // Return newest first
     items.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
     return sendJson(res, 200, items);
   }
@@ -157,11 +178,9 @@ const server = http.createServer({ maxHeaderSize: 1048576 }, (req, res) => {
       return sendJson(res, 404, { error: 'Media not found' });
     }
 
-    // Remove file
     if (target.storagePath && fs.existsSync(target.storagePath)) {
       try { fs.unlinkSync(target.storagePath); } catch (_) {}
     }
-    // Remove thumbnail
     if (target.thumbnailStoragePath && fs.existsSync(target.thumbnailStoragePath)) {
       try { fs.unlinkSync(target.thumbnailStoragePath); } catch (_) {}
     }
@@ -175,7 +194,7 @@ const server = http.createServer({ maxHeaderSize: 1048576 }, (req, res) => {
   // 5. Upload Media Stream (Binary Stream with Metadata Headers)
   if (pathname === '/api/upload' && req.method === 'POST') {
     let filename = req.headers['x-filename'];
-    const mediaType = req.headers['x-type'] || 'photo'; // 'photo' | 'video'
+    const mediaType = req.headers['x-type'] || 'photo';
     const mimeType = req.headers['x-mime-type'] || (mediaType === 'video' ? 'video/webm' : 'image/jpeg');
     const width = parseInt(req.headers['x-width'], 10) || 1920;
     const height = parseInt(req.headers['x-height'], 10) || 1080;
@@ -184,7 +203,6 @@ const server = http.createServer({ maxHeaderSize: 1048576 }, (req, res) => {
     const aspectRatio = req.headers['x-aspect-ratio'] || '9:16';
     const thumbBase64 = req.headers['x-thumbnail-base64'] || '';
 
-    // If filename wasn't pre-reserved, generate one
     if (!filename) {
       const ext = mediaType === 'video' ? (mimeType.includes('mp4') ? 'mp4' : 'webm') : 'jpg';
       filename = getNextCounter(ext).filename;
@@ -196,18 +214,22 @@ const server = http.createServer({ maxHeaderSize: 1048576 }, (req, res) => {
     const thumbFilename = `${id}_thumb.jpg`;
     const thumbFilePath = path.join(DIRS.mediaThumbs, thumbFilename);
 
-    const writeStream = fs.createWriteStream(filePath);
-    let bytesReceived = 0;
+    let writeStream;
+    try {
+      writeStream = fs.createWriteStream(filePath);
+    } catch (err) {
+      return sendJson(res, 500, { error: 'Storage write not supported on read-only serverless: ' + err.message });
+    }
 
+    let bytesReceived = 0;
     req.on('data', chunk => {
       bytesReceived += chunk.length;
-      writeStream.write(chunk);
+      if (writeStream) writeStream.write(chunk);
     });
 
     req.on('end', () => {
-      writeStream.end();
+      if (writeStream) writeStream.end();
 
-      // Save thumbnail if provided via base64 header
       let hasThumb = false;
       if (thumbBase64) {
         try {
@@ -251,7 +273,7 @@ const server = http.createServer({ maxHeaderSize: 1048576 }, (req, res) => {
 
     req.on('error', err => {
       console.error('Upload stream error:', err);
-      writeStream.destroy();
+      if (writeStream) writeStream.destroy();
       return sendJson(res, 500, { error: err.message });
     });
 
@@ -263,7 +285,7 @@ const server = http.createServer({ maxHeaderSize: 1048576 }, (req, res) => {
   // --------------------------------------------------------------------------
   if (pathname.startsWith('/media/')) {
     const relPath = pathname.replace('/media/', '');
-    const fullPath = path.join(ROOT_DIR, 'media', relPath);
+    const fullPath = path.join(__dirname, 'media', relPath);
 
     if (!fs.existsSync(fullPath) || fs.statSync(fullPath).isDirectory()) {
       res.writeHead(404, { 'Content-Type': 'text/plain' });
@@ -277,7 +299,6 @@ const server = http.createServer({ maxHeaderSize: 1048576 }, (req, res) => {
     const contentType = MIME_TYPES[ext] || 'application/octet-stream';
     const range = req.headers.range;
 
-    // Handle Range requests for smooth video scrubbing on mobile
     if (range) {
       const parts = range.replace(/bytes=/, '').split('-');
       const start = parseInt(parts[0], 10);
@@ -314,7 +335,7 @@ const server = http.createServer({ maxHeaderSize: 1048576 }, (req, res) => {
     reqPath = '/index.html';
   }
 
-  const filePath = path.join(ROOT_DIR, reqPath);
+  const filePath = path.join(__dirname, reqPath);
   const ext = path.extname(filePath).toLowerCase();
   const contentType = MIME_TYPES[ext] || 'application/octet-stream';
 
@@ -330,7 +351,7 @@ const server = http.createServer({ maxHeaderSize: 1048576 }, (req, res) => {
     } else {
       res.writeHead(200, {
         'Content-Type': contentType,
-        'Cache-Control': 'no-cache',
+        'Cache-Control': ext === '.css' || ext === '.js' ? 'public, max-age=0, must-revalidate' : 'no-cache',
         'Access-Control-Allow-Origin': '*'
       });
       res.end(content);
@@ -338,6 +359,10 @@ const server = http.createServer({ maxHeaderSize: 1048576 }, (req, res) => {
   });
 });
 
-server.listen(PORT, () => {
-  console.log(`HKC_CAMERA_CENTRAL_SERVER_RUNNING on http://localhost:${PORT}`);
-});
+export default server;
+
+if (process.env.NODE_ENV !== 'test' && !process.env.VERCEL) {
+  server.listen(PORT, () => {
+    console.log(`HKC_CAMERA_CENTRAL_SERVER_RUNNING on http://localhost:${PORT}`);
+  });
+}

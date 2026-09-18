@@ -75,7 +75,7 @@ cd hkc-camera
 
 # 2. Start the local server
 npm start
-# or: node backend/server.mjs
+# or: node server.mjs
 ```
 
 The application will start at `http://localhost:8080`.
@@ -95,7 +95,6 @@ hkc-camera/
 ├── api/
 │   └── status.js            # Vercel Serverless Function (API health check)
 ├── backend/
-│   ├── server.mjs           # Standalone Node.js HTTP server
 │   └── data/                # Local metadata (counter.json, media-index.json)
 ├── icons/                   # App icons & SVG assets for PWA manifest
 │   ├── camera-icon.svg
@@ -106,11 +105,13 @@ hkc-camera/
 │   ├── photos/              # Captured photos
 │   ├── thumbnails/          # Generated photo/video thumbnails
 │   └── videos/              # Captured video reels
+├── build.js                 # Static asset build script
 ├── index.html               # Main HTML5 application shell & UI
 ├── manifest.json            # PWA Web App Manifest
 ├── package.json             # NPM package scripts & configuration
 ├── README.md                # Documentation & deployment guide
 ├── script.js                # Core camera, IndexedDB, and gallery logic
+├── server.mjs               # Standalone Node.js HTTP server & Vercel entrypoint
 ├── style.css                # Custom CSS styling & responsive mobile UI
 ├── sw.js                    # Service Worker for offline PWA caching
 └── vercel.json              # Vercel configuration (headers, PWA caching, policies)

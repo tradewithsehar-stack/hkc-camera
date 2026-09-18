@@ -3,10 +3,11 @@
   "version": "2.0.0",
   "description": "HKC CAMERA - Professional Mobile-First Camera Studio & Reels PWA",
   "type": "module",
+  "main": "server.mjs",
   "scripts": {
-    "build": "node build.js",
-    "start": "node backend/server.mjs",
-    "dev": "node backend/server.mjs"
+    "start": "node server.mjs",
+    "dev": "node server.mjs",
+    "build": "node build.js"
   },
   "keywords": [
     "camera",
@@ -17,5 +18,8 @@
     "vercel"
   ],
   "author": "tradewithsehar-stack",
-  "license": "MIT"
+  "license": "MIT",
+  "engines": {
+    "node": ">=18.0.0"
+  }
 }

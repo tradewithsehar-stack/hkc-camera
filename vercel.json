@@ -1,6 +1,10 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
-  "outputDirectory": "dist",
+  "functions": {
+    "server.mjs": {
+      "includeFiles": "{style.css,script.js,sw.js,manifest.json,icons/**,index.html}"
+    }
+  },
   "headers": [
     {
       "source": "/(.*)",
