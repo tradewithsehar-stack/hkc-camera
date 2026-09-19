@@ -2,7 +2,7 @@
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "functions": {
     "server.mjs": {
-      "includeFiles": "{style.css,script.js,sw.js,manifest.json,icons/**,index.html}"
+      "includeFiles": "{style.css,script.js,supabase.js,sw.js,manifest.json,icons/**,index.html}"
     }
   },
   "rewrites": [
@@ -53,6 +53,19 @@
     },
     {
       "source": "/script.js",
+      "headers": [
+        {
+          "key": "Content-Type",
+          "value": "application/javascript; charset=utf-8"
+        },
+        {
+          "key": "Cache-Control",
+          "value": "public, max-age=0, must-revalidate"
+        }
+      ]
+    },
+    {
+      "source": "/supabase.js",
       "headers": [
         {
           "key": "Content-Type",
