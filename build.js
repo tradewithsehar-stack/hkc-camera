@@ -17,7 +17,8 @@ const files = [
   'style.css',
   'script.js',
   'manifest.json',
-  'sw.js'
+  'sw.js',
+  'supabase.js'
 ];
 
 for (const file of files) {

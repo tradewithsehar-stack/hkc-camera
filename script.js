@@ -163,6 +163,8 @@
     timerCountdown: document.getElementById('timer-countdown'),
     timerCountdownNumber: document.getElementById('timer-countdown-number'),
     screenFlash: document.getElementById('screen-flash'),
+    captureVignettePulse: document.getElementById('capture-vignette-pulse'),
+    flyingThumbnailProxy: document.getElementById('flying-thumbnail-proxy'),
     cameraFallback: document.getElementById('camera-fallback'),
     btnCameraRetry: document.getElementById('btn-camera-retry'),
     btnCameraSimulator: document.getElementById('btn-camera-simulator'),
@@ -221,8 +223,11 @@
 
     // Gallery Screen Elements
     tabGallery: document.getElementById('tab-gallery'),
+    gallerySkeleton: document.getElementById('gallery-skeleton'),
     galleryGrid: document.getElementById('gallery-grid'),
     galleryEmpty: document.getElementById('gallery-empty'),
+    galleryError: document.getElementById('gallery-error'),
+    btnRetryGallery: document.getElementById('btn-retry-gallery'),
     btnEmptyGotoCamera: document.getElementById('btn-empty-goto-camera'),
     galleryCountBadge: document.getElementById('gallery-count-badge'),
     galleryFilterTabBtns: document.querySelectorAll('.filter-tab-btn'),
@@ -251,8 +256,13 @@
     btnClearVault: document.getElementById('btn-clear-vault'),
     btnLogout: document.getElementById('btn-logout'),
 
-    // Cloud Vault Settings Elements
-    settingGithubToken: document.getElementById('setting-github-token'),
+    // Supabase Cloud Vault Settings Elements
+    settingSupabaseUrl: document.getElementById('setting-supabase-url'),
+    settingSupabaseKey: document.getElementById('setting-supabase-key'),
+    settingSupabaseEmail: document.getElementById('setting-supabase-email'),
+    settingSupabasePassword: document.getElementById('setting-supabase-password'),
+    btnSupabaseSignin: document.getElementById('btn-supabase-signin'),
+    btnSupabaseSignup: document.getElementById('btn-supabase-signup'),
     btnSaveCloudToken: document.getElementById('btn-save-cloud-token'),
     cloudSyncStatusBadge: document.getElementById('cloud-sync-status-badge'),
     cloudTokenFeedback: document.getElementById('cloud-token-feedback'),
@@ -579,13 +589,33 @@
   }
 
   // --------------------------------------------------------------------------
-  // Central Cloud Storage & Cross-Device Sync Engine
+  // Central Cloud Storage & Cross-Device Sync Engine (Supabase Real-Time)
   // --------------------------------------------------------------------------
   const RemoteStorageEngine = {
-    GITHUB_REPO: 'tradewithsehar-stack/hkc-camera',
+    isSubscribed: false,
 
-    getGithubToken() {
-      return localStorage.getItem('hkc_github_token') || '';
+    async init() {
+      if (window.HKCSupabase && window.HKCSupabase.isConfigured()) {
+        try {
+          await window.HKCSupabase.init();
+          this.setupRealtimeSubscription();
+        } catch (e) {
+          console.warn('Supabase auto-init note:', e.message);
+        }
+      }
+    },
+
+    setupRealtimeSubscription() {
+      if (this.isSubscribed || !window.HKCSupabase) return;
+      try {
+        window.HKCSupabase.subscribeToChanges(async (payload) => {
+          console.log('[Supabase Realtime] Change received from another device:', payload.eventType);
+          await this.fetchCentralMedia(false);
+        });
+        this.isSubscribed = true;
+      } catch (err) {
+        console.warn('Realtime subscription failed:', err);
+      }
     },
 
     async getNextFilename(ext = 'jpg') {
@@ -596,21 +626,75 @@
           if (data && data.filename) return data.filename;
         }
       } catch (_) {}
-      // Offline fallback to local continuous counter
       return NamingManager.getNextFilename(ext);
     },
 
     async uploadMedia(record) {
-      this.showUploadStatus('SYNCING TO CLOUD...', 'uploading');
+      this.showUploadStatus('SYNCING 10%...', 'uploading');
 
+      // 1. If Supabase is configured, upload directly to Supabase Storage and PostgreSQL
+      if (window.HKCSupabase && window.HKCSupabase.isConfigured()) {
+        try {
+          const userId = window.HKCSupabase.getUserId();
+          const targetPath = `${userId}/${record.filename}`;
+
+          // Upload original media blob with progress tracking
+          const uploadResult = await window.HKCSupabase.uploadStorageFile(
+            record.blob,
+            targetPath,
+            record.mimeType,
+            (progress) => {
+              this.showUploadStatus(`UPLOADING ${progress}%...`, 'uploading');
+            }
+          );
+
+          // Upload thumbnail blob if present
+          let thumbPath = null;
+          if (record.thumbnail) {
+            thumbPath = `${userId}/thumb_${record.filename}`;
+            try {
+              await window.HKCSupabase.uploadStorageFile(record.thumbnail, thumbPath, 'image/jpeg');
+            } catch (tErr) {
+              console.warn('Thumbnail upload warning:', tErr);
+            }
+          }
+
+          // Insert metadata row into PostgreSQL public.media table
+          const metadataRecord = {
+            ...record,
+            storagePath: uploadResult.path,
+            thumbnailPath: thumbPath
+          };
+          await window.HKCSupabase.insertMediaRecord(metadataRecord);
+
+          // Update local record to synced
+          record.syncStatus = 'synced';
+          record.url = uploadResult.publicUrl;
+          if (thumbPath) {
+            record.thumbnailUrl = uploadResult.publicUrl;
+          }
+          await DB.updateMedia(record);
+
+          this.showUploadStatus('✓ CLOUD SYNCED', 'success');
+          await this.fetchCentralMedia(false);
+          return record;
+        } catch (supabaseErr) {
+          console.warn('Supabase upload failed, queuing locally in IndexedDB:', supabaseErr);
+          record.syncStatus = 'pending';
+          await DB.updateMedia(record);
+          this.showUploadStatus('OFFLINE (QUEUED)', 'pending');
+          await GalleryEngine.renderGallery();
+          return null;
+        }
+      }
+
+      // 2. Fallback to /api/upload if Supabase is not yet configured
       try {
-        // Prepare base64 thumbnail if available
         let thumbBase64 = '';
         if (record.thumbnail) {
           thumbBase64 = await blobToBase64(record.thumbnail);
         }
 
-        const ghToken = this.getGithubToken();
         const headers = {
           'x-filename': record.filename,
           'x-type': record.type || 'photo',
@@ -622,10 +706,6 @@
           'x-aspect-ratio': String(record.aspectRatio || '9:16'),
           'x-thumbnail-base64': thumbBase64.replace(/^data:[^;]+;base64,/, '')
         };
-
-        if (ghToken) {
-          headers['x-github-token'] = ghToken;
-        }
 
         const res = await fetch('/api/upload', {
           method: 'POST',
@@ -641,134 +721,86 @@
             record.url = result.item.url;
             record.thumbnailUrl = result.item.thumbnailUrl;
             await DB.updateMedia(record);
-            await this.fetchCentralMedia();
+            await this.fetchCentralMedia(false);
             return result.item;
           }
         }
+      } catch (_) {}
 
-        // Direct GitHub client-side upload fallback if token is configured
-        if (ghToken) {
-          const directItem = await this.uploadDirectToGitHub(record, ghToken, thumbBase64);
-          if (directItem) {
-            this.showUploadStatus('✓ SAVED TO GITHUB', 'success');
-            record.syncStatus = 'synced';
-            record.url = directItem.url;
-            record.thumbnailUrl = directItem.thumbnailUrl;
-            await DB.updateMedia(record);
-            await this.fetchCentralMedia();
-            return directItem;
-          }
-        }
-
-        throw new Error('Server storage unavailable');
-      } catch (err) {
-        console.warn('Central cloud sync queued:', err);
-        record.syncStatus = 'pending';
-        await DB.updateMedia(record);
-        this.showUploadStatus('SAVED TO VAULT', 'pending');
-        await GalleryEngine.renderGallery();
-        return null;
-      }
-    },
-
-    async uploadDirectToGitHub(record, token, thumbBase64 = '') {
-      try {
-        const folder = record.type === 'video' ? 'media/videos' : 'media/photos';
-        const targetPath = `${folder}/${record.filename}`;
-        const fileBase64 = await blobToBase64(record.blob);
-        const cleanBase64 = fileBase64.replace(/^data:[^;]+;base64,/, '');
-
-        const ghRes = await fetch(`https://api.github.com/repos/${this.GITHUB_REPO}/contents/${targetPath}`, {
-          method: 'PUT',
-          headers: {
-            'Authorization': `Bearer ${token}`,
-            'Accept': 'application/vnd.github.v3+json',
-            'Content-Type': 'application/json'
-          },
-          body: JSON.stringify({
-            message: `upload: ${record.type} ${record.filename} [HKC Studio]`,
-            content: cleanBase64,
-            branch: 'main'
-          })
-        });
-
-        if (ghRes.ok) {
-          const cdnUrl = `https://raw.githubusercontent.com/${this.GITHUB_REPO}/main/${targetPath}`;
-          return {
-            id: record.filename.substring(0, record.filename.lastIndexOf('.')) || record.filename,
-            filename: record.filename,
-            type: record.type || 'photo',
-            url: cdnUrl,
-            thumbnailUrl: thumbBase64 ? `data:image/jpeg;base64,${thumbBase64}` : cdnUrl,
-            timestamp: record.timestamp || Date.now(),
-            aspectRatio: record.aspectRatio,
-            fileSize: record.fileSize,
-            mimeType: record.mimeType,
-            cloudSynced: true
-          };
-        }
-      } catch (err) {
-        console.error('Direct GitHub upload failed:', err);
-      }
+      // Default queued state
+      record.syncStatus = 'pending';
+      await DB.updateMedia(record);
+      this.showUploadStatus('SAVED TO VAULT', 'pending');
+      await GalleryEngine.renderGallery();
       return null;
     },
 
-    async fetchCentralMedia() {
-      let centralList = [];
-      try {
-        const res = await fetch('/api/media');
-        if (res.ok) {
-          centralList = await res.json();
-        }
-      } catch (_) {}
+    async fetchCentralMedia(showSkeleton = true) {
+      if (showSkeleton && DOM.gallerySkeleton && DOM.galleryGrid) {
+        DOM.gallerySkeleton.classList.remove('hidden');
+        DOM.galleryGrid.classList.add('hidden');
+        if (DOM.galleryError) DOM.galleryError.classList.add('hidden');
+      }
 
-      // Also query GitHub raw repository index
-      try {
-        const ghRaw = await fetch(`https://raw.githubusercontent.com/${this.GITHUB_REPO}/main/backend/data/media-index.json?_t=${Date.now()}`, {
-          headers: { 'Cache-Control': 'no-cache' }
-        });
-        if (ghRaw.ok) {
-          const ghList = await ghRaw.json();
-          if (Array.isArray(ghList)) {
-            const seenNames = new Set(centralList.map(item => item.filename));
-            for (const item of ghList) {
-              if (item && item.filename && !seenNames.has(item.filename)) {
-                seenNames.add(item.filename);
-                centralList.push(item);
-              }
-            }
-          }
+      let cloudList = [];
+
+      // 1. If Supabase is configured, fetch directly from PostgreSQL table
+      if (window.HKCSupabase && window.HKCSupabase.isConfigured()) {
+        try {
+          cloudList = await window.HKCSupabase.fetchMediaRecords(100);
+          if (DOM.galleryError) DOM.galleryError.classList.add('hidden');
+        } catch (err) {
+          console.warn('Supabase fetchMedia error:', err);
+          if (DOM.galleryError) DOM.galleryError.classList.remove('hidden');
         }
-      } catch (_) {}
+      } else {
+        // Fallback to /api/media
+        try {
+          const res = await fetch('/api/media');
+          if (res.ok) {
+            cloudList = await res.json();
+          }
+        } catch (_) {}
+      }
 
       try {
         const localMedia = await DB.getAllMedia();
         const pendingItems = localMedia.filter(m => m.syncStatus === 'pending');
 
-        const seen = new Set(pendingItems.map(p => p.filename));
+        const seenNames = new Set(pendingItems.map(p => p.filename));
         const merged = [...pendingItems];
 
-        for (const item of centralList) {
-          if (item && item.filename && !seen.has(item.filename)) {
-            seen.add(item.filename);
+        for (const item of cloudList) {
+          if (item && item.filename && !seenNames.has(item.filename)) {
+            seenNames.add(item.filename);
             merged.push(item);
           }
         }
 
-        // Also add any synced local items that might not be in central list yet
+        // Also add any local synced records that may not yet appear in cloud query
         for (const localItem of localMedia) {
-          if (localItem && localItem.filename && !seen.has(localItem.filename)) {
-            seen.add(localItem.filename);
+          if (localItem && localItem.filename && !seenNames.has(localItem.filename)) {
+            seenNames.add(localItem.filename);
             merged.push(localItem);
           }
         }
 
         merged.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
         APP_STATE.mediaList = merged;
+
+        if (showSkeleton && DOM.gallerySkeleton && DOM.galleryGrid) {
+          DOM.gallerySkeleton.classList.add('hidden');
+          DOM.galleryGrid.classList.remove('hidden');
+        }
+
         GalleryEngine.renderGallery();
         GalleryEngine.refreshGalleryCount();
         return merged;
-      } catch (_) {
+      } catch (err) {
+        if (showSkeleton && DOM.gallerySkeleton && DOM.galleryGrid) {
+          DOM.gallerySkeleton.classList.add('hidden');
+          DOM.galleryGrid.classList.remove('hidden');
+        }
         const localItems = await DB.getAllMedia();
         APP_STATE.mediaList = localItems;
         GalleryEngine.renderGallery();
@@ -799,11 +831,19 @@
     },
 
     async deleteMedia(id) {
+      const item = APP_STATE.mediaList.find(m => m.id === id);
+      if (item && item.cloudSynced && window.HKCSupabase && window.HKCSupabase.isConfigured()) {
+        try {
+          await window.HKCSupabase.deleteMediaRecord(item);
+        } catch (e) {
+          console.warn('Supabase delete error:', e);
+        }
+      }
       try {
         await fetch(`/api/media/${encodeURIComponent(id)}`, { method: 'DELETE' });
       } catch (_) {}
       await DB.deleteMedia(id);
-      await this.fetchCentralMedia();
+      await this.fetchCentralMedia(false);
     },
 
     showUploadStatus(text, state = 'uploading') {
@@ -1050,9 +1090,24 @@
       DOM.flipIcon.style.transform = 'rotate(180deg)';
       setTimeout(() => { DOM.flipIcon.style.transform = 'none'; }, 350);
 
+      // Micro-animation 6: Smooth camera stream switch blur-fade
+      DOM.cameraVideo.classList.add('switching-camera');
+
+      // Clean track disposal before flipping
+      if (APP_STATE.stream) {
+        try {
+          APP_STATE.stream.getTracks().forEach(t => t.stop());
+        } catch (_) {}
+        APP_STATE.stream = null;
+        APP_STATE.activeTrack = null;
+      }
+
       APP_STATE.facingMode = (APP_STATE.facingMode === 'environment') ? 'user' : 'environment';
       await this.startCamera();
-      showToast(APP_STATE.facingMode === 'environment' ? 'Rear Camera (Reels)' : 'Front Camera Active', 'info', 1500);
+
+      setTimeout(() => {
+        DOM.cameraVideo.classList.remove('switching-camera');
+      }, 180);
     },
 
     applyMirrorStyle() {
@@ -1777,10 +1832,11 @@
       // Automatic background upload to Central Storage (capture != download)
       RemoteStorageEngine.uploadMedia(savedRecord);
 
-      // Update camera last photo/video thumbnail button
+      // Update camera last photo/video thumbnail button & trigger Apple-style glide animation
       if (thumbBlob) {
         const thumbUrl = URL.createObjectURL(thumbBlob);
         DOM.thumbImgContainer.innerHTML = `<img src="${thumbUrl}" alt="Latest video" />`;
+        triggerFlyingThumbnail(thumbUrl);
       }
 
       // Open Instant Video Review Modal
@@ -1863,6 +1919,38 @@
   };
 
   // --------------------------------------------------------------------------
+  // 4. Apple-Style Flying Thumbnail Glide Animation
+  // --------------------------------------------------------------------------
+  function triggerFlyingThumbnail(imageUrl) {
+    const proxy = DOM.flyingThumbnailProxy;
+    const thumbBtn = DOM.btnLastPhoto;
+    const stage = DOM.cameraStage;
+    if (!proxy || !thumbBtn || !stage) return;
+
+    try {
+      const stageRect = stage.getBoundingClientRect();
+      const thumbRect = thumbBtn.getBoundingClientRect();
+
+      const targetTx = (thumbRect.left + thumbRect.width / 2) - (stageRect.left + stageRect.width / 2);
+      const targetTy = (thumbRect.top + thumbRect.height / 2) - (stageRect.top + stageRect.height / 2);
+
+      proxy.style.backgroundImage = `url("${imageUrl}")`;
+      proxy.style.setProperty('--target-tx', `${targetTx}px`);
+      proxy.style.setProperty('--target-ty', `${targetTy}px`);
+
+      proxy.classList.remove('animating');
+      void proxy.offsetWidth; // Force reflow
+      proxy.classList.add('animating');
+
+      setTimeout(() => {
+        proxy.classList.remove('animating');
+        thumbBtn.classList.add('pop-arrival');
+        setTimeout(() => thumbBtn.classList.remove('pop-arrival'), 360);
+      }, 460);
+    } catch (_) {}
+  }
+
+  // --------------------------------------------------------------------------
   // 11. Photo Capture Engine (High-Resolution Native Canvas)
   // --------------------------------------------------------------------------
   const CaptureEngine = {
@@ -1919,11 +2007,16 @@
 
       AudioService.playShutterSound();
       if (navigator.vibrate) {
-        try { navigator.vibrate(40); } catch (_) {}
+        try { navigator.vibrate(35); } catch (_) {}
       }
 
+      // Micro-animation 3: Subtle 80ms Exposure Flash & Vignette Edge Pulse
       DOM.screenFlash.classList.add('flash');
-      setTimeout(() => DOM.screenFlash.classList.remove('flash'), 100);
+      if (DOM.captureVignettePulse) DOM.captureVignettePulse.classList.add('pulse');
+      setTimeout(() => {
+        DOM.screenFlash.classList.remove('flash');
+        if (DOM.captureVignettePulse) DOM.captureVignettePulse.classList.remove('pulse');
+      }, 80);
 
       try {
         const canvas = DOM.captureCanvas;
@@ -1975,9 +2068,11 @@
         // Automatic background upload to Central Storage (capture != download)
         RemoteStorageEngine.uploadMedia(savedRecord);
 
+        // Micro-animation 4: Flying thumbnail glide into bottom-left preview button
         if (thumbBlob) {
           const url = URL.createObjectURL(thumbBlob);
           DOM.thumbImgContainer.innerHTML = `<img src="${url}" alt="Latest photo" />`;
+          triggerFlyingThumbnail(url);
         }
 
         PhotoPreviewModal.open(savedRecord);
@@ -2447,29 +2542,41 @@
     },
 
     initCloudSettings() {
-      const savedToken = localStorage.getItem('hkc_github_token') || '';
-      if (DOM.settingGithubToken) {
-        DOM.settingGithubToken.value = savedToken;
+      if (window.HKCSupabase) {
+        const { url, key } = window.HKCSupabase.getConfig();
+        if (DOM.settingSupabaseUrl) DOM.settingSupabaseUrl.value = url;
+        if (DOM.settingSupabaseKey) DOM.settingSupabaseKey.value = key;
+
+        const isConnected = window.HKCSupabase.isConfigured();
+        this.updateCloudStatus(isConnected);
+
+        window.HKCSupabase.onStateChange((state) => {
+          this.updateCloudStatus(window.HKCSupabase.isConfigured());
+        });
       }
-      this.updateCloudStatus(!!savedToken);
     },
 
     updateCloudStatus(isConnected) {
       if (DOM.cloudSyncStatusBadge) {
-        DOM.cloudSyncStatusBadge.textContent = isConnected ? 'CONNECTED' : 'NOT CONNECTED';
+        DOM.cloudSyncStatusBadge.textContent = isConnected ? 'CONNECTED (SYNC ACTIVE)' : 'NOT CONNECTED';
         DOM.cloudSyncStatusBadge.classList.toggle('status-connected', isConnected);
       }
       if (DOM.moreCloudVal) {
-        DOM.moreCloudVal.textContent = isConnected ? 'CONNECTED' : 'LOCAL ONLY';
+        DOM.moreCloudVal.textContent = isConnected ? 'CLOUD SYNC' : 'LOCAL ONLY';
       }
       if (DOM.btnDisconnectCloudToken) {
         DOM.btnDisconnectCloudToken.classList.toggle('hidden', !isConnected);
       }
       if (DOM.cloudTokenFeedback) {
-        DOM.cloudTokenFeedback.textContent = isConnected
-          ? 'Cloud Vault connected: cross-device sync active'
-          : 'Ready to connect cross-device storage';
-        DOM.cloudTokenFeedback.className = isConnected ? 'cloud-token-feedback text-success' : 'cloud-token-feedback text-muted';
+        if (isConnected) {
+          const user = window.HKCSupabase ? window.HKCSupabase.getUser() : null;
+          const userText = (user && user.email) ? `Logged in as: ${user.email}` : 'Connected to Supabase (Realtime Sync Active)';
+          DOM.cloudTokenFeedback.textContent = `✓ ${userText}`;
+          DOM.cloudTokenFeedback.className = 'cloud-token-feedback text-success';
+        } else {
+          DOM.cloudTokenFeedback.textContent = 'Ready to connect cross-device storage';
+          DOM.cloudTokenFeedback.className = 'cloud-token-feedback text-muted';
+        }
       }
     },
 
@@ -2568,11 +2675,13 @@
 
     if (targetTab === 'camera') {
       DOM.tabCamera.classList.add('active');
+      DOM.tabCamera.classList.add('camera-enter-stagger');
+      setTimeout(() => DOM.tabCamera.classList.remove('camera-enter-stagger'), 600);
       if (!APP_STATE.stream) CameraEngine.startCamera();
     } else if (targetTab === 'gallery') {
       DOM.tabGallery.classList.add('active');
       CameraEngine.stopCamera();
-      GalleryEngine.renderGallery();
+      RemoteStorageEngine.fetchCentralMedia();
     } else if (targetTab === 'settings') {
       DOM.tabSettings.classList.add('active');
       CameraEngine.stopCamera();
@@ -2915,7 +3024,16 @@
       });
     }
 
-    // Shutter / Record Button
+    // Micro-animation 2: Shutter Button with Apple Physical Spring Press (scale 0.92)
+    DOM.btnShutter.addEventListener('pointerdown', () => {
+      DOM.btnShutter.classList.add('spring-pressed');
+    });
+    const releaseSpring = () => {
+      DOM.btnShutter.classList.remove('spring-pressed');
+    };
+    DOM.btnShutter.addEventListener('pointerup', releaseSpring);
+    DOM.btnShutter.addEventListener('pointercancel', releaseSpring);
+    DOM.btnShutter.addEventListener('pointerleave', releaseSpring);
     DOM.btnShutter.addEventListener('click', () => CaptureEngine.handleShutterPress());
 
     // Switch Camera
@@ -3059,46 +3177,95 @@
       });
     }
 
-    // Cloud Token Save / Disconnect Actions
+    // Supabase Cloud Storage Save / Disconnect Actions
     if (DOM.btnSaveCloudToken) {
       DOM.btnSaveCloudToken.addEventListener('click', async () => {
-        const token = (DOM.settingGithubToken ? DOM.settingGithubToken.value : '').trim();
-        if (!token) {
-          showToast('Please paste your GitHub token', 'warn', 2000);
+        const url = (DOM.settingSupabaseUrl ? DOM.settingSupabaseUrl.value : '').trim();
+        const key = (DOM.settingSupabaseKey ? DOM.settingSupabaseKey.value : '').trim();
+        if (!url || !key) {
+          showToast('Please enter both Supabase Project URL and Anon Public Key', 'warn', 3000);
           return;
         }
 
         DOM.btnSaveCloudToken.textContent = 'CONNECTING...';
         try {
-          const testRes = await fetch('https://api.github.com/user', {
-            headers: { 'Authorization': `Bearer ${token}` }
-          });
-          if (testRes.ok) {
-            const userData = await testRes.json();
-            localStorage.setItem('hkc_github_token', token);
+          if (window.HKCSupabase) {
+            await window.HKCSupabase.saveConfig(url, key);
             SettingsManager.updateCloudStatus(true);
-            showToast(`Connected: ${userData.login || 'GitHub User'}`, 'success', 2500);
-            await RemoteStorageEngine.fetchCentralMedia();
+            RemoteStorageEngine.setupRealtimeSubscription();
+            showToast('✓ Connected to Supabase Cloud Storage!', 'success', 2500);
+            await RemoteStorageEngine.fetchCentralMedia(false);
             await RemoteStorageEngine.syncPendingQueue(true);
-          } else {
-            showToast('Invalid GitHub Token. Check permissions.', 'danger', 3000);
           }
-        } catch (_) {
-          localStorage.setItem('hkc_github_token', token);
-          SettingsManager.updateCloudStatus(true);
-          showToast('Token saved locally', 'info', 2000);
+        } catch (err) {
+          showToast('Connection failed: ' + err.message, 'danger', 3500);
         } finally {
-          DOM.btnSaveCloudToken.textContent = 'CONNECT';
+          DOM.btnSaveCloudToken.textContent = 'CONNECT CLOUD';
         }
       });
     }
 
     if (DOM.btnDisconnectCloudToken) {
       DOM.btnDisconnectCloudToken.addEventListener('click', () => {
-        localStorage.removeItem('hkc_github_token');
-        if (DOM.settingGithubToken) DOM.settingGithubToken.value = '';
+        if (window.HKCSupabase) window.HKCSupabase.disconnect();
+        if (DOM.settingSupabaseUrl) DOM.settingSupabaseUrl.value = '';
+        if (DOM.settingSupabaseKey) DOM.settingSupabaseKey.value = '';
         SettingsManager.updateCloudStatus(false);
         showToast('Cloud storage disconnected', 'info', 2000);
+      });
+    }
+
+    // Optional Supabase User Sign In
+    if (DOM.btnSupabaseSignin) {
+      DOM.btnSupabaseSignin.addEventListener('click', async () => {
+        const email = (DOM.settingSupabaseEmail ? DOM.settingSupabaseEmail.value : '').trim();
+        const password = (DOM.settingSupabasePassword ? DOM.settingSupabasePassword.value : '').trim();
+        if (!email || !password) {
+          showToast('Please enter account email and password', 'warn', 2500);
+          return;
+        }
+        try {
+          DOM.btnSupabaseSignin.textContent = 'Signing in...';
+          await window.HKCSupabase.signIn(email, password);
+          showToast(`Logged into cloud account: ${email}`, 'success', 2500);
+          SettingsManager.updateCloudStatus(true);
+          await RemoteStorageEngine.fetchCentralMedia(true);
+        } catch (err) {
+          showToast('Sign in error: ' + err.message, 'danger', 3500);
+        } finally {
+          DOM.btnSupabaseSignin.textContent = 'Sign In';
+        }
+      });
+    }
+
+    // Optional Supabase User Sign Up
+    if (DOM.btnSupabaseSignup) {
+      DOM.btnSupabaseSignup.addEventListener('click', async () => {
+        const email = (DOM.settingSupabaseEmail ? DOM.settingSupabaseEmail.value : '').trim();
+        const password = (DOM.settingSupabasePassword ? DOM.settingSupabasePassword.value : '').trim();
+        if (!email || !password) {
+          showToast('Please enter account email and password to create account', 'warn', 2500);
+          return;
+        }
+        try {
+          DOM.btnSupabaseSignup.textContent = 'Creating...';
+          await window.HKCSupabase.signUp(email, password);
+          showToast(`Account created for ${email}! Check email if confirmation is enabled.`, 'success', 3500);
+          SettingsManager.updateCloudStatus(true);
+        } catch (err) {
+          showToast('Sign up error: ' + err.message, 'danger', 3500);
+        } finally {
+          DOM.btnSupabaseSignup.textContent = 'Create Account';
+        }
+      });
+    }
+
+    // Gallery Cloud Sync Retry Button
+    if (DOM.btnRetryGallery) {
+      DOM.btnRetryGallery.addEventListener('click', async () => {
+        showToast('Retrying cloud sync...', 'info', 1500);
+        await RemoteStorageEngine.fetchCentralMedia(true);
+        await RemoteStorageEngine.syncPendingQueue(true);
       });
     }
 
@@ -3237,6 +3404,7 @@
     } catch (_) {}
 
     SettingsManager.init();
+    await RemoteStorageEngine.init();
     setupEventListeners();
     AuthManager.init();
 
@@ -3244,7 +3412,7 @@
     switchCameraMode('photo');
 
     // Fetch and sync central cloud vault silently
-    RemoteStorageEngine.fetchCentralMedia();
+    RemoteStorageEngine.fetchCentralMedia(false);
     RemoteStorageEngine.syncPendingQueue(false);
 
     if ('serviceWorker' in navigator) {

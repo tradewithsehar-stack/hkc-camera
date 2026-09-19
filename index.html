@@ -208,41 +208,41 @@
            =================================================================== -->
       <header class="camera-zone-top" aria-label="Top camera controls">
         <div class="top-controls-row">
-          <!-- Left: Torch & Night Mode (min 44x44px touch targets) -->
+          <!-- Left: Torch Flash Toggle & Night Mode -->
           <div class="top-row-left">
             <button type="button" id="btn-flash" class="camera-action-btn" aria-label="Toggle camera flashlight" title="Torch">
-              <svg id="flash-off-icon" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2">
+              <svg id="flash-off-icon" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2">
                 <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/>
                 <line x1="1" y1="1" x2="23" y2="23"/>
               </svg>
-              <svg id="flash-on-icon" class="hidden" viewBox="0 0 24 24" width="20" height="20" fill="var(--color-accent)" stroke="var(--color-accent)" stroke-width="2">
+              <svg id="flash-on-icon" class="hidden" viewBox="0 0 24 24" width="18" height="18" fill="var(--color-accent)" stroke="var(--color-accent)" stroke-width="2">
                 <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/>
               </svg>
             </button>
 
-            <button type="button" id="btn-night-mode" class="camera-action-btn" aria-label="Toggle Night Mode" title="Night Mode">
-              <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2">
+            <button type="button" id="btn-night-mode" class="camera-action-btn top-btn-night" aria-label="Toggle Night Mode" title="Night Mode">
+              <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2">
                 <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>
               </svg>
               <span id="night-badge" class="btn-micro-badge hidden">NIGHT</span>
             </button>
           </div>
 
-          <!-- Center: Compact Readout Pill (9:16 • 1080P • 30 FPS) -->
+          <!-- Center: Compact Readout Pill (9:16 • 1080P • 30 FPS) with Tap-to-Change Aspect Ratio -->
           <div class="top-row-center">
-            <div id="camera-status-pill" class="camera-status-pill" title="Aspect Ratio • Resolution • Frame Rate">
+            <button type="button" id="camera-status-pill" class="camera-status-pill" aria-label="Open Aspect Ratio & Format Settings" title="Tap to change Aspect Ratio">
               <span id="status-ratio-text">9:16</span>
               <span class="status-separator">&bull;</span>
               <span id="camera-res-badge">1080P</span>
               <span class="status-separator">&bull;</span>
               <span id="camera-fps-badge">30FPS</span>
-            </div>
+            </button>
           </div>
 
-          <!-- Right: Grid, Settings, More (min 44x44px touch targets) -->
+          <!-- Right: Grid, Settings, More Options -->
           <div class="top-row-right">
-            <button type="button" id="btn-grid-toggle" class="camera-action-btn" aria-label="Toggle 3x3 composition grid" title="Grid 3x3">
-              <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2">
+            <button type="button" id="btn-grid-toggle" class="camera-action-btn top-btn-grid" aria-label="Toggle 3x3 composition grid" title="Grid 3x3">
+              <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2">
                 <rect x="3" y="3" width="18" height="18" rx="2"/>
                 <line x1="9" y1="3" x2="9" y2="21"/>
                 <line x1="15" y1="3" x2="15" y2="21"/>
@@ -252,7 +252,7 @@
             </button>
 
             <button type="button" id="btn-settings-quick" class="camera-action-btn" aria-label="Studio settings" title="Settings">
-              <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2">
+              <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2">
                 <circle cx="12" cy="12" r="3"/>
                 <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/>
               </svg>
@@ -260,7 +260,7 @@
 
             <!-- More Menu Toggle (•••) -->
             <button type="button" id="btn-more-toggle" class="camera-action-btn" aria-label="More camera options" title="More Options">
-              <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor">
+              <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor">
                 <circle cx="5" cy="12" r="2"/>
                 <circle cx="12" cy="12" r="2"/>
                 <circle cx="19" cy="12" r="2"/>
@@ -349,8 +349,12 @@
           <span id="timer-countdown-number" class="countdown-number">3</span>
         </div>
 
-        <!-- Capture Shutter Flash Screen Effect -->
+        <!-- Capture Shutter Flash Screen Effect & Vignette Pulse -->
         <div id="screen-flash" class="screen-flash-overlay" aria-hidden="true"></div>
+        <div id="capture-vignette-pulse" class="capture-vignette-overlay" aria-hidden="true"></div>
+
+        <!-- Flying Thumbnail Glide Proxy for Apple-Style Gallery Transition -->
+        <div id="flying-thumbnail-proxy" class="flying-thumbnail-proxy" aria-hidden="true"></div>
 
         <!-- Camera Permission & Error Fallback -->
         <div id="camera-fallback" class="camera-fallback-card hidden">
@@ -841,9 +845,32 @@
           </div>
         </div>
 
+        <!-- Gallery Loading Skeleton -->
+        <div id="gallery-skeleton" class="gallery-skeleton-grid hidden" aria-hidden="true">
+          <div class="skeleton-item"></div>
+          <div class="skeleton-item"></div>
+          <div class="skeleton-item"></div>
+          <div class="skeleton-item"></div>
+          <div class="skeleton-item"></div>
+          <div class="skeleton-item"></div>
+        </div>
+
         <!-- Gallery Grid of Media Thumbnails -->
         <div id="gallery-grid" class="gallery-grid" role="region" aria-label="Captured media grid">
           <!-- Dynamically populated by script.js -->
+        </div>
+
+        <!-- Gallery Cloud Sync Error / Offline Notice -->
+        <div id="gallery-error" class="gallery-error-state hidden">
+          <div class="error-icon-wrap">
+            <svg viewBox="0 0 24 24" width="36" height="36" fill="none" stroke="var(--color-accent)" stroke-width="2">
+              <path d="M17.5 19H9a7 7 0 1 1 6.71-9h1.79a4.5 4.5 0 1 1 0 9Z"/>
+              <line x1="2" y1="2" x2="22" y2="22"/>
+            </svg>
+          </div>
+          <h3 class="error-title">Cloud Sync Pending</h3>
+          <p id="gallery-error-msg" class="error-desc">Showing local offline captures. Cloud will automatically synchronize once connected.</p>
+          <button type="button" id="btn-retry-gallery" class="btn btn-secondary btn-sm">RETRY SYNC</button>
         </div>
 
         <!-- Gallery Empty State -->
@@ -1016,7 +1043,7 @@
 
         <div class="settings-group" id="cloud-vault-settings-group">
           <div class="group-header-with-badge">
-            <h3 class="group-title">CROSS-DEVICE CLOUD VAULT</h3>
+            <h3 class="group-title">CROSS-DEVICE CLOUD VAULT (SUPABASE)</h3>
             <span id="cloud-sync-status-badge" class="cloud-status-badge">NOT CONNECTED</span>
           </div>
 
@@ -1026,20 +1053,48 @@
                 <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" class="text-accent">
                   <path d="M17.5 19H9a7 7 0 1 1 6.71-9h1.79a4.5 4.5 0 1 1 0 9Z"/>
                 </svg>
-                <strong>Cross-Device Cloud Sync</strong>
+                <strong>Supabase Real-Time Cloud Storage</strong>
               </div>
-              <p>Photos and videos you capture will automatically sync to GitHub repository <code>tradewithsehar-stack/hkc-camera</code>, so you can see them on any phone, PC, or browser when you login.</p>
+              <p>Connect your Supabase project to enable real cross-device synchronization. Photos and videos captured on Phone A will instantly appear on Phone B, PC, Mac, and iPad.</p>
             </div>
+
             <div class="cloud-token-input-wrap">
-              <label for="setting-github-token" class="cloud-token-label">GitHub Token (Personal Access Token):</label>
-              <div class="cloud-token-input-row">
-                <input type="password" id="setting-github-token" class="cloud-token-input" placeholder="Paste GitHub Token (ghp_...)" autocomplete="off" />
-                <button type="button" id="btn-save-cloud-token" class="btn btn-primary btn-sm">CONNECT</button>
-              </div>
+              <label for="setting-supabase-url" class="cloud-token-label">Supabase Project URL:</label>
+              <input type="url" id="setting-supabase-url" class="cloud-token-input" placeholder="https://your-project.supabase.co" autocomplete="off" spellcheck="false" />
             </div>
+
+            <div class="cloud-token-input-wrap">
+              <label for="setting-supabase-key" class="cloud-token-label">Supabase Anon Public API Key:</label>
+              <input type="password" id="setting-supabase-key" class="cloud-token-input" placeholder="eyJhbGciOiJIUzI1NiIsIn..." autocomplete="off" spellcheck="false" />
+            </div>
+
+            <div class="cloud-auth-toggle-wrap">
+              <details class="cloud-auth-details">
+                <summary class="cloud-auth-summary">Cloud Account Sign In / Sign Up (Optional)</summary>
+                <div class="cloud-auth-fields">
+                  <div class="cloud-token-input-wrap">
+                    <label for="setting-supabase-email" class="cloud-token-label">Account Email:</label>
+                    <input type="email" id="setting-supabase-email" class="cloud-token-input" placeholder="user@example.com" autocomplete="email" />
+                  </div>
+                  <div class="cloud-token-input-wrap">
+                    <label for="setting-supabase-password" class="cloud-token-label">Account Password:</label>
+                    <input type="password" id="setting-supabase-password" class="cloud-token-input" placeholder="Password" autocomplete="current-password" />
+                  </div>
+                  <div class="cloud-auth-buttons">
+                    <button type="button" id="btn-supabase-signin" class="btn btn-secondary btn-xs">Sign In</button>
+                    <button type="button" id="btn-supabase-signup" class="btn btn-ghost btn-xs">Create Account</button>
+                  </div>
+                </div>
+              </details>
+            </div>
+
+            <div class="cloud-token-input-row" style="margin-top: 6px;">
+              <button type="button" id="btn-save-cloud-token" class="btn btn-primary btn-sm">CONNECT CLOUD</button>
+              <button type="button" id="btn-disconnect-cloud-token" class="btn btn-ghost btn-sm hidden">DISCONNECT</button>
+            </div>
+
             <div class="cloud-token-actions">
               <span id="cloud-token-feedback" class="cloud-token-feedback text-muted">Ready to connect cross-device storage</span>
-              <button type="button" id="btn-disconnect-cloud-token" class="btn btn-ghost btn-xs hidden">Disconnect</button>
             </div>
           </div>
         </div>
@@ -1394,6 +1449,10 @@
 
   <!-- TOAST NOTIFICATION CONTAINER -->
   <div id="toast-container" class="toast-container" aria-live="polite"></div>
+
+  <!-- Supabase JS Client & HKC Cloud Sync Module -->
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="supabase.js"></script>
 
   <!-- App Script -->
   <script src="script.js"></script>

@@ -806,10 +806,10 @@ input[type="password"]::-ms-clear {
   left: 0;
   right: 0;
   z-index: 25;
-  padding-top: max(10px, var(--sat));
-  padding-left: max(12px, var(--sal));
-  padding-right: max(12px, var(--sar));
-  background: linear-gradient(to bottom, rgba(0, 0, 0, 0.7) 0%, rgba(0, 0, 0, 0.25) 60%, transparent 100%);
+  padding-top: max(8px, var(--sat));
+  padding-left: max(8px, var(--sal));
+  padding-right: max(8px, var(--sar));
+  background: linear-gradient(to bottom, rgba(0, 0, 0, 0.72) 0%, rgba(0, 0, 0, 0.25) 60%, transparent 100%);
   pointer-events: none;
   border-bottom: none;
 }
@@ -818,24 +818,26 @@ input[type="password"]::-ms-clear {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  height: 52px;
-  padding: 0 4px;
-  gap: 8px;
+  height: clamp(44px, 11vw, 52px);
+  padding: 0 clamp(2px, 1.5vw, 6px);
+  gap: clamp(4px, 1.5vw, 8px);
   pointer-events: none;
+  max-width: 100%;
 }
 
 .top-row-left, .top-row-right {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: clamp(4px, 1.2vw, 8px);
   pointer-events: none;
+  flex-shrink: 0;
 }
 
 .top-row-center {
   display: flex;
   align-items: center;
   justify-content: center;
-  flex: 1;
+  flex: 1 1 auto;
   min-width: 0;
   pointer-events: none;
 }
@@ -845,19 +847,31 @@ input[type="password"]::-ms-clear {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 44px;
-  height: 44px;
-  min-width: 44px;
-  min-height: 44px;
+  width: clamp(34px, 8.8vw, 42px);
+  height: clamp(34px, 8.8vw, 42px);
   border-radius: var(--radius-full);
-  background: rgba(22, 22, 28, 0.55);
+  background: rgba(22, 22, 28, 0.6);
   color: #FFFFFF;
-  backdrop-filter: blur(14px);
-  -webkit-backdrop-filter: blur(14px);
-  border: 1px solid rgba(255, 255, 255, 0.15);
-  transition: transform var(--transition-fast), background var(--transition-fast), border-color var(--transition-fast);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  transition: transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1), background var(--transition-fast), border-color var(--transition-fast);
   flex-shrink: 0;
   pointer-events: auto;
+  cursor: pointer;
+}
+
+/* 44x44px accessible touch target without visual crowding */
+.camera-action-btn::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  min-width: 44px;
+  min-height: 44px;
+  width: 100%;
+  height: 100%;
 }
 
 .camera-action-btn:active {
@@ -873,7 +887,7 @@ input[type="password"]::-ms-clear {
   position: absolute;
   bottom: 2px;
   right: 2px;
-  font-size: 8px;
+  font-size: 7.5px;
   font-weight: 700;
   background: var(--color-accent);
   color: #000000;
@@ -883,28 +897,31 @@ input[type="password"]::-ms-clear {
 }
 
 .camera-status-pill {
-  display: flex;
+  display: inline-flex;
   align-items: center;
-  gap: 6px;
-  padding: 5px 12px;
+  justify-content: center;
+  gap: clamp(3px, 1vw, 6px);
+  padding: 4px clamp(6px, 1.8vw, 12px);
   border-radius: var(--radius-full);
-  background: rgba(20, 20, 26, 0.6);
-  backdrop-filter: blur(14px);
-  -webkit-backdrop-filter: blur(14px);
+  background: rgba(20, 20, 26, 0.65);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
   border: 1px solid rgba(255, 255, 255, 0.16);
   font-family: var(--font-mono);
-  font-size: 11px;
+  font-size: clamp(9px, 2.4vw, 11px);
   font-weight: 600;
-  letter-spacing: 0.5px;
+  letter-spacing: 0.3px;
   color: #DDDDDD;
   white-space: nowrap;
   pointer-events: auto;
   cursor: pointer;
   box-shadow: 0 4px 14px rgba(0, 0, 0, 0.35);
-  transition: background var(--transition-fast), border-color var(--transition-fast);
+  transition: background var(--transition-fast), border-color var(--transition-fast), transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
+  max-width: 100%;
 }
 
 .camera-status-pill:active {
+  transform: scale(0.94);
   background: rgba(229, 169, 60, 0.2);
   border-color: var(--color-accent);
 }
@@ -920,6 +937,12 @@ input[type="password"]::-ms-clear {
 
 .camera-status-pill #camera-fps-badge {
   color: var(--color-accent);
+}
+
+@media (max-width: 375px) {
+  .top-btn-grid {
+    display: none !important;
+  }
 }
 
 /* Upload Status Chip */
@@ -1162,8 +1185,8 @@ input[type="password"]::-ms-clear {
 }
 
 .shutter-btn {
-  width: 74px;
-  height: 74px;
+  width: clamp(68px, 18vw, 76px);
+  height: clamp(68px, 18vw, 76px);
   border-radius: var(--radius-full);
   border: 4px solid #FFFFFF;
   padding: 4px;
@@ -1171,15 +1194,19 @@ input[type="password"]::-ms-clear {
   display: flex;
   align-items: center;
   justify-content: center;
-  transition: transform var(--transition-fast);
+  transition: transform 0.35s cubic-bezier(0.34, 1.56, 0.64, 1);
   cursor: pointer;
   flex-shrink: 0;
   pointer-events: auto;
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
+  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.55);
+  user-select: none;
+  -webkit-tap-highlight-color: transparent;
 }
 
-.shutter-btn:active {
-  transform: scale(0.93);
+.shutter-btn:active,
+.shutter-btn.spring-pressed {
+  transform: scale(0.92);
+  transition: transform 0.08s cubic-bezier(0.2, 0.9, 0.3, 1);
 }
 
 .shutter-inner {
@@ -1187,7 +1214,7 @@ input[type="password"]::-ms-clear {
   height: 100%;
   border-radius: var(--radius-full);
   background: #FFFFFF;
-  transition: all var(--transition-fast);
+  transition: all 0.28s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 .mode-photo-shutter .shutter-inner {
@@ -1200,12 +1227,19 @@ input[type="password"]::-ms-clear {
   border-radius: var(--radius-full);
 }
 
+/* Video Recording Morph: smoothly shrinks into a rounded red square */
 .shutter-btn.recording .shutter-inner {
-  width: 30px;
-  height: 30px;
-  border-radius: 6px;
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
   background: #FF3B30;
-  animation: recPulse 1.2s infinite ease-in-out;
+  animation: videoRecordPulse 1.4s infinite cubic-bezier(0.4, 0, 0.6, 1);
+}
+
+@keyframes videoRecordPulse {
+  0% { transform: scale(1); opacity: 1; box-shadow: 0 0 0 rgba(255, 59, 48, 0.5); }
+  50% { transform: scale(0.88); opacity: 0.85; box-shadow: 0 0 14px rgba(255, 59, 48, 0.7); }
+  100% { transform: scale(1); opacity: 1; box-shadow: 0 0 0 rgba(255, 59, 48, 0.5); }
 }
 
 /* In-Video Snap Button (Snapshot while recording video) */
@@ -1689,6 +1723,7 @@ input[type="password"]::-ms-clear {
   100% { transform: scale(1); opacity: 0.9; }
 }
 
+/* 3. Subtle 80ms Exposure Flash (Never Blinding) */
 .screen-flash-overlay {
   position: absolute;
   inset: 0;
@@ -1696,11 +1731,82 @@ input[type="password"]::-ms-clear {
   opacity: 0;
   pointer-events: none;
   z-index: 45;
-  transition: opacity 120ms ease-out;
+  transition: opacity 80ms cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 .screen-flash-overlay.flash {
-  opacity: 0.85;
+  opacity: 0.45;
+}
+
+/* Soft Edge Vignette Pulse on Capture */
+.capture-vignette-overlay {
+  position: absolute;
+  inset: 0;
+  box-shadow: inset 0 0 80px 24px rgba(0, 0, 0, 0.85);
+  opacity: 0;
+  pointer-events: none;
+  z-index: 44;
+  transition: opacity 120ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.capture-vignette-overlay.pulse {
+  opacity: 1;
+}
+
+/* 4. Flying Thumbnail Glide Transition into Gallery Button */
+.flying-thumbnail-proxy {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: clamp(120px, 36vw, 180px);
+  height: clamp(180px, 54vw, 270px);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+  background-size: cover;
+  background-position: center;
+  box-shadow: 0 16px 36px rgba(0, 0, 0, 0.7);
+  border: 2px solid rgba(255, 255, 255, 0.8);
+  z-index: 50;
+  pointer-events: none;
+  opacity: 0;
+  transform: translate(-50%, -50%) scale(1);
+  will-change: transform, opacity;
+}
+
+.flying-thumbnail-proxy.animating {
+  animation: flyGlideToThumb 460ms cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+@keyframes flyGlideToThumb {
+  0% {
+    opacity: 1;
+    transform: translate(-50%, -50%) scale(1);
+  }
+  65% {
+    opacity: 0.95;
+  }
+  100% {
+    opacity: 0;
+    transform: translate(var(--target-tx, -140px), var(--target-ty, 260px)) scale(0.24);
+  }
+}
+
+.thumb-preview-btn.pop-arrival {
+  animation: thumbPopArrival 340ms cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+@keyframes thumbPopArrival {
+  0% { transform: scale(1); }
+  45% { transform: scale(1.18); border-color: var(--color-accent); }
+  100% { transform: scale(1); }
+}
+
+/* 6. Smooth Camera Stream Switch Blur-Fade */
+#camera-video.switching-camera {
+  filter: blur(14px) brightness(0.65);
+  opacity: 0.35;
+  transform: scale(0.97);
+  transition: filter 150ms cubic-bezier(0.16, 1, 0.3, 1), opacity 150ms cubic-bezier(0.16, 1, 0.3, 1), transform 150ms cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 .camera-fallback-card {
@@ -3385,4 +3491,171 @@ input[type="password"]::-ms-clear {
 
 .cloud-token-feedback.text-danger {
   color: #E74C3C;
+}
+
+/* Supabase Auth Accordion & Buttons in Settings */
+.cloud-auth-toggle-wrap {
+  margin-top: 4px;
+}
+
+.cloud-auth-details {
+  background: rgba(14, 14, 18, 0.6);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: var(--radius-sm);
+  padding: 8px 12px;
+}
+
+.cloud-auth-summary {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--color-accent);
+  cursor: pointer;
+  user-select: none;
+  outline: none;
+}
+
+.cloud-auth-fields {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 10px;
+  padding-top: 8px;
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.cloud-auth-buttons {
+  display: flex;
+  gap: 8px;
+  margin-top: 4px;
+}
+
+/* 1. Camera Open Staggered Entrance Animations */
+.camera-enter-stagger .camera-zone-top {
+  animation: cameraTopEnter 420ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+.camera-enter-stagger .aspect-frame-mask {
+  animation: cameraViewfinderEnter 480ms cubic-bezier(0.16, 1, 0.3, 1) 40ms both;
+}
+
+.camera-enter-stagger .camera-zone-controls {
+  animation: cameraControlsEnter 440ms cubic-bezier(0.16, 1, 0.3, 1) 100ms both;
+}
+
+.camera-enter-stagger .camera-zone-shutter {
+  animation: cameraShutterEnter 460ms cubic-bezier(0.16, 1, 0.3, 1) 140ms both;
+}
+
+@keyframes cameraTopEnter {
+  from { opacity: 0; transform: translateY(-20px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes cameraViewfinderEnter {
+  from { opacity: 0; transform: scale(0.96); }
+  to { opacity: 1; transform: scale(1); }
+}
+
+@keyframes cameraControlsEnter {
+  from { opacity: 0; transform: translateY(14px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes cameraShutterEnter {
+  from { opacity: 0; transform: translateY(24px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* 8. Non-Blocking Background Upload Status Chip */
+.upload-status-chip {
+  transition: all 240ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.upload-status-chip.status-uploading {
+  border-color: var(--color-accent);
+  color: var(--color-accent);
+}
+
+.upload-status-chip.status-success {
+  border-color: #2ECC71;
+  color: #2ECC71;
+  background: rgba(10, 30, 15, 0.9);
+}
+
+.upload-status-chip.status-error {
+  border-color: #E74C3C;
+  color: #E74C3C;
+  background: rgba(30, 10, 10, 0.9);
+}
+
+/* Gallery Skeleton Loading Grid */
+.gallery-skeleton-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 4px;
+  width: 100%;
+}
+
+.skeleton-item {
+  aspect-ratio: 9 / 16;
+  background: linear-gradient(90deg, rgba(255, 255, 255, 0.04) 25%, rgba(255, 255, 255, 0.09) 50%, rgba(255, 255, 255, 0.04) 75%);
+  background-size: 200% 100%;
+  border-radius: var(--radius-sm);
+  animation: skeletonPulse 1.4s infinite ease-in-out;
+}
+
+@keyframes skeletonPulse {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
+/* Gallery Cloud Sync Error State */
+.gallery-error-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  padding: 40px 20px;
+  gap: 12px;
+  background: rgba(25, 25, 30, 0.5);
+  border: 1px dashed rgba(255, 255, 255, 0.15);
+  border-radius: var(--radius-md);
+  margin: 16px 0;
+}
+
+.error-icon-wrap {
+  width: 64px;
+  height: 64px;
+  border-radius: var(--radius-full);
+  background: rgba(229, 169, 60, 0.1);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 4px;
+}
+
+.error-title {
+  font-size: 16px;
+  font-weight: 700;
+  color: #FFFFFF;
+  margin: 0;
+}
+
+.error-desc {
+  font-size: 12px;
+  color: var(--text-secondary);
+  max-width: 320px;
+  margin: 0;
+  line-height: 1.5;
+}
+
+/* Accessibility: Prefers Reduced Motion */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
 }
