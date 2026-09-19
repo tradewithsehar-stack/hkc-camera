@@ -172,7 +172,6 @@
     zoomControlBar: document.getElementById('zoom-control-bar'),
     zoomChips: document.querySelectorAll('.zoom-chip'),
     zoomTypeBadge: document.getElementById('zoom-type-badge'),
-    presetPills: document.querySelectorAll('.preset-pill'),
     modeItems: document.querySelectorAll('.mode-item'),
 
     // Camera Zone 4: Shutter Console
@@ -251,6 +250,13 @@
     storageCounterText: document.getElementById('storage-counter-text'),
     btnClearVault: document.getElementById('btn-clear-vault'),
     btnLogout: document.getElementById('btn-logout'),
+
+    // Cloud Vault Settings Elements
+    settingGithubToken: document.getElementById('setting-github-token'),
+    btnSaveCloudToken: document.getElementById('btn-save-cloud-token'),
+    cloudSyncStatusBadge: document.getElementById('cloud-sync-status-badge'),
+    cloudTokenFeedback: document.getElementById('cloud-token-feedback'),
+    btnDisconnectCloudToken: document.getElementById('btn-disconnect-cloud-token'),
 
     // Instant Photo Preview Modal
     capturePreviewModal: document.getElementById('capture-preview-modal'),
@@ -576,6 +582,12 @@
   // Central Cloud Storage & Cross-Device Sync Engine
   // --------------------------------------------------------------------------
   const RemoteStorageEngine = {
+    GITHUB_REPO: 'tradewithsehar-stack/hkc-camera',
+
+    getGithubToken() {
+      return localStorage.getItem('hkc_github_token') || '';
+    },
+
     async getNextFilename(ext = 'jpg') {
       try {
         const res = await fetch(`/api/counter/next?ext=${encodeURIComponent(ext)}`);
@@ -589,7 +601,7 @@
     },
 
     async uploadMedia(record) {
-      this.showUploadStatus('UPLOADING TO CLOUD...', 'uploading');
+      this.showUploadStatus('SYNCING TO CLOUD...', 'uploading');
 
       try {
         // Prepare base64 thumbnail if available
@@ -598,6 +610,7 @@
           thumbBase64 = await blobToBase64(record.thumbnail);
         }
 
+        const ghToken = this.getGithubToken();
         const headers = {
           'x-filename': record.filename,
           'x-type': record.type || 'photo',
@@ -610,6 +623,10 @@
           'x-thumbnail-base64': thumbBase64.replace(/^data:[^;]+;base64,/, '')
         };
 
+        if (ghToken) {
+          headers['x-github-token'] = ghToken;
+        }
+
         const res = await fetch('/api/upload', {
           method: 'POST',
           headers,
@@ -619,56 +636,139 @@
         if (res.ok) {
           const result = await res.json();
           if (result && result.item) {
-            this.showUploadStatus('✓ SAVED TO HKC CAMERA', 'success');
-            // Mark record as synced in local IndexedDB
+            this.showUploadStatus('✓ CLOUD SYNCED', 'success');
             record.syncStatus = 'synced';
             record.url = result.item.url;
             record.thumbnailUrl = result.item.thumbnailUrl;
             await DB.updateMedia(record);
-            
-            // Refresh gallery immediately without reloading
             await this.fetchCentralMedia();
             return result.item;
           }
         }
-        throw new Error('Upload response not OK');
+
+        // Direct GitHub client-side upload fallback if token is configured
+        if (ghToken) {
+          const directItem = await this.uploadDirectToGitHub(record, ghToken, thumbBase64);
+          if (directItem) {
+            this.showUploadStatus('✓ SAVED TO GITHUB', 'success');
+            record.syncStatus = 'synced';
+            record.url = directItem.url;
+            record.thumbnailUrl = directItem.thumbnailUrl;
+            await DB.updateMedia(record);
+            await this.fetchCentralMedia();
+            return directItem;
+          }
+        }
+
+        throw new Error('Server storage unavailable');
       } catch (err) {
-        console.warn('Central cloud upload failed, queuing for offline sync:', err);
+        console.warn('Central cloud sync queued:', err);
         record.syncStatus = 'pending';
         await DB.updateMedia(record);
-        this.showUploadStatus('UPLOAD PENDING (OFFLINE)', 'pending');
-        showToast('Saved in offline vault. Will auto-sync when online.', 'warn', 3500);
+        this.showUploadStatus('SAVED TO VAULT', 'pending');
         await GalleryEngine.renderGallery();
         return null;
       }
     },
 
+    async uploadDirectToGitHub(record, token, thumbBase64 = '') {
+      try {
+        const folder = record.type === 'video' ? 'media/videos' : 'media/photos';
+        const targetPath = `${folder}/${record.filename}`;
+        const fileBase64 = await blobToBase64(record.blob);
+        const cleanBase64 = fileBase64.replace(/^data:[^;]+;base64,/, '');
+
+        const ghRes = await fetch(`https://api.github.com/repos/${this.GITHUB_REPO}/contents/${targetPath}`, {
+          method: 'PUT',
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Accept': 'application/vnd.github.v3+json',
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            message: `upload: ${record.type} ${record.filename} [HKC Studio]`,
+            content: cleanBase64,
+            branch: 'main'
+          })
+        });
+
+        if (ghRes.ok) {
+          const cdnUrl = `https://raw.githubusercontent.com/${this.GITHUB_REPO}/main/${targetPath}`;
+          return {
+            id: record.filename.substring(0, record.filename.lastIndexOf('.')) || record.filename,
+            filename: record.filename,
+            type: record.type || 'photo',
+            url: cdnUrl,
+            thumbnailUrl: thumbBase64 ? `data:image/jpeg;base64,${thumbBase64}` : cdnUrl,
+            timestamp: record.timestamp || Date.now(),
+            aspectRatio: record.aspectRatio,
+            fileSize: record.fileSize,
+            mimeType: record.mimeType,
+            cloudSynced: true
+          };
+        }
+      } catch (err) {
+        console.error('Direct GitHub upload failed:', err);
+      }
+      return null;
+    },
+
     async fetchCentralMedia() {
+      let centralList = [];
       try {
         const res = await fetch('/api/media');
         if (res.ok) {
-          const centralList = await res.json();
-          const localMedia = await DB.getAllMedia();
-          const pendingItems = localMedia.filter(m => m.syncStatus === 'pending');
+          centralList = await res.json();
+        }
+      } catch (_) {}
 
-          // Merge: pending offline items first, then central items (avoid duplicates)
-          const seen = new Set(pendingItems.map(p => p.filename));
-          const merged = [...pendingItems];
-
-          for (const item of centralList) {
-            if (!seen.has(item.filename)) {
-              seen.add(item.filename);
-              merged.push(item);
+      // Also query GitHub raw repository index
+      try {
+        const ghRaw = await fetch(`https://raw.githubusercontent.com/${this.GITHUB_REPO}/main/backend/data/media-index.json?_t=${Date.now()}`, {
+          headers: { 'Cache-Control': 'no-cache' }
+        });
+        if (ghRaw.ok) {
+          const ghList = await ghRaw.json();
+          if (Array.isArray(ghList)) {
+            const seenNames = new Set(centralList.map(item => item.filename));
+            for (const item of ghList) {
+              if (item && item.filename && !seenNames.has(item.filename)) {
+                seenNames.add(item.filename);
+                centralList.push(item);
+              }
             }
           }
-
-          APP_STATE.mediaList = merged;
-          GalleryEngine.renderGallery();
-          GalleryEngine.refreshGalleryCount();
-          return merged;
         }
+      } catch (_) {}
+
+      try {
+        const localMedia = await DB.getAllMedia();
+        const pendingItems = localMedia.filter(m => m.syncStatus === 'pending');
+
+        const seen = new Set(pendingItems.map(p => p.filename));
+        const merged = [...pendingItems];
+
+        for (const item of centralList) {
+          if (item && item.filename && !seen.has(item.filename)) {
+            seen.add(item.filename);
+            merged.push(item);
+          }
+        }
+
+        // Also add any synced local items that might not be in central list yet
+        for (const localItem of localMedia) {
+          if (localItem && localItem.filename && !seen.has(localItem.filename)) {
+            seen.add(localItem.filename);
+            merged.push(localItem);
+          }
+        }
+
+        merged.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
+        APP_STATE.mediaList = merged;
+        GalleryEngine.renderGallery();
+        GalleryEngine.refreshGalleryCount();
+        return merged;
       } catch (_) {
-        // Offline: load from IndexedDB
         const localItems = await DB.getAllMedia();
         APP_STATE.mediaList = localItems;
         GalleryEngine.renderGallery();
@@ -677,18 +777,24 @@
       }
     },
 
-    async syncPendingQueue() {
+    async syncPendingQueue(isManual = false) {
       if (!navigator.onLine) return;
       try {
         const localMedia = await DB.getAllMedia();
         const pending = localMedia.filter(m => m.syncStatus === 'pending' && m.blob);
         if (pending.length === 0) return;
 
-        showToast(`Auto-syncing ${pending.length} offline capture(s)...`, 'info', 2000);
+        if (isManual) {
+          showToast(`Syncing ${pending.length} capture(s) to Cloud...`, 'info', 2000);
+        }
+
         for (const item of pending) {
           await this.uploadMedia(item);
         }
-        showToast('All captures synced to central cloud vault!', 'success', 2500);
+
+        if (isManual) {
+          showToast('All captures synced to cloud vault!', 'success', 2500);
+        }
       } catch (_) {}
     },
 
@@ -709,15 +815,20 @@
       if (state === 'success' || state === 'pending') {
         setTimeout(() => {
           DOM.uploadStatusChip.classList.add('hidden');
-        }, 3200);
+        }, 2500);
       }
     }
   };
 
   // --------------------------------------------------------------------------
-  // 6. Toast Notification System
+  // 6. Toast Notification System (Single-Toast Guaranteed, No Spam)
   // --------------------------------------------------------------------------
-  function showToast(message, type = 'info', duration = 3000) {
+  function showToast(message, type = 'info', duration = 2000) {
+    if (!DOM.toastContainer) return;
+
+    // Remove any currently visible toast so banners never stack or spam
+    DOM.toastContainer.innerHTML = '';
+
     const toast = document.createElement('div');
     toast.className = `toast-item toast-${type}`;
 
@@ -1756,7 +1867,7 @@
   // --------------------------------------------------------------------------
   const CaptureEngine = {
     async handleShutterPress() {
-      if (APP_STATE.cameraMode === 'video' || APP_STATE.cameraMode === 'slowmo' || APP_STATE.cameraMode === 'timelapse') {
+      if (APP_STATE.cameraMode === 'video' || APP_STATE.cameraMode === 'reels' || APP_STATE.cameraMode === 'slowmo' || APP_STATE.cameraMode === 'timelapse') {
         if (APP_STATE.isRecordingVideo) {
           VideoEngine.stopRecording();
         } else {
@@ -2331,8 +2442,35 @@
       this.updateTimerUi();
 
       OrientationManager.init();
-
       NamingManager.updateUiCounter();
+      this.initCloudSettings();
+    },
+
+    initCloudSettings() {
+      const savedToken = localStorage.getItem('hkc_github_token') || '';
+      if (DOM.settingGithubToken) {
+        DOM.settingGithubToken.value = savedToken;
+      }
+      this.updateCloudStatus(!!savedToken);
+    },
+
+    updateCloudStatus(isConnected) {
+      if (DOM.cloudSyncStatusBadge) {
+        DOM.cloudSyncStatusBadge.textContent = isConnected ? 'CONNECTED' : 'NOT CONNECTED';
+        DOM.cloudSyncStatusBadge.classList.toggle('status-connected', isConnected);
+      }
+      if (DOM.moreCloudVal) {
+        DOM.moreCloudVal.textContent = isConnected ? 'CONNECTED' : 'LOCAL ONLY';
+      }
+      if (DOM.btnDisconnectCloudToken) {
+        DOM.btnDisconnectCloudToken.classList.toggle('hidden', !isConnected);
+      }
+      if (DOM.cloudTokenFeedback) {
+        DOM.cloudTokenFeedback.textContent = isConnected
+          ? 'Cloud Vault connected: cross-device sync active'
+          : 'Ready to connect cross-device storage';
+        DOM.cloudTokenFeedback.className = isConnected ? 'cloud-token-feedback text-success' : 'cloud-token-feedback text-muted';
+      }
     },
 
     applyTheme(theme) {
@@ -2446,66 +2584,59 @@
   function switchCameraMode(newMode) {
     APP_STATE.cameraMode = newMode;
 
-    DOM.modeItems.forEach(item => {
-      const isCurrent = (item.dataset.mode === newMode);
-      item.classList.toggle('active', isCurrent);
-      item.setAttribute('aria-selected', isCurrent ? 'true' : 'false');
-    });
+    if (DOM.modeItems) {
+      DOM.modeItems.forEach(item => {
+        const isCurrent = (item.dataset.mode === newMode);
+        item.classList.toggle('active', isCurrent);
+        item.setAttribute('aria-selected', isCurrent ? 'true' : 'false');
+        if (isCurrent && item.scrollIntoView) {
+          try {
+            item.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
+          } catch (_) {}
+        }
+      });
+    }
 
-    // Shutter styling
-    DOM.btnShutter.className = `shutter-btn mode-${newMode}-shutter`;
+    // Configure mode specifics
+    if (newMode === 'reels') {
+      AspectRatioManager.setRatio('9:16');
+      APP_STATE.targetResolution = 1080;
+      APP_STATE.targetFps = 30;
+      DOM.btnShutter.className = 'shutter-btn mode-video-shutter';
+    } else if (newMode === 'video' || newMode === 'slowmo' || newMode === 'timelapse') {
+      DOM.btnShutter.className = 'shutter-btn mode-video-shutter';
+    } else {
+      DOM.btnShutter.className = 'shutter-btn mode-photo-shutter';
+    }
 
-    // Overlays
+    // Overlays & Specifics
     DOM.proHud.classList.toggle('hidden', newMode !== 'pro');
     DOM.portraitVignette.classList.toggle('hidden', newMode !== 'portrait');
 
+    if (newMode === 'portrait') {
+      AspectRatioManager.setRatio('4:5');
+    } else if (newMode === 'night') {
+      APP_STATE.isNightMode = true;
+      DOM.nightBadge.classList.remove('hidden');
+      DOM.btnNightMode.classList.add('active');
+    }
+
     if (newMode === 'pro') {
       DOM.proDrawer.classList.remove('hidden');
+    } else {
+      DOM.proDrawer.classList.add('hidden');
     }
 
     // If leaving video mode while recording, stop recording safely
-    if (newMode !== 'video' && newMode !== 'slowmo' && newMode !== 'timelapse' && APP_STATE.isRecordingVideo) {
+    const isVideoMode = (newMode === 'video' || newMode === 'reels' || newMode === 'slowmo' || newMode === 'timelapse');
+    if (!isVideoMode && APP_STATE.isRecordingVideo) {
       VideoEngine.stopRecording();
     }
   }
 
   function applyPreset(presetName) {
-    DOM.presetPills.forEach(p => p.classList.toggle('active', p.dataset.preset === presetName));
-
-    if (presetName === 'reels') {
-      // Reels Priority: 9:16 vertical, 1080p, 30 FPS, Video mode
-      AspectRatioManager.setRatio('9:16');
-      APP_STATE.targetResolution = 1080;
-      APP_STATE.targetFps = 30;
-      switchCameraMode('video');
-      showToast('Preset: REELS (9:16 • 1080p • 30 FPS)', 'info');
-    } else if (presetName === 'cinematic') {
-      AspectRatioManager.setRatio('16:9');
-      APP_STATE.targetFps = 24;
-      applyFilter('cinema');
-      switchCameraMode('video');
-      showToast('Preset: CINEMATIC (16:9 • 24 FPS • Cinema Filter)', 'info');
-    } else if (presetName === 'night') {
-      APP_STATE.isNightMode = true;
-      DOM.nightBadge.classList.remove('hidden');
-      DOM.btnNightMode.classList.add('active');
-      APP_STATE.targetFps = 30;
-      switchCameraMode('video');
-      showToast('Preset: NIGHT (30 FPS • Low-Light Ready)', 'info');
-    } else if (presetName === 'portrait') {
-      AspectRatioManager.setRatio('4:5');
-      switchCameraMode('portrait');
-      showToast('Preset: PORTRAIT (4:5 Depth Vignette)', 'info');
-    } else if (presetName === 'pro') {
-      switchCameraMode('pro');
-      DOM.proDrawer.classList.remove('hidden');
-    } else if (presetName === 'standard') {
-      AspectRatioManager.setRatio('3:4');
-      CameraEngine.setZoom(1.0);
-      applyFilter('original');
-      switchCameraMode('photo');
-      showToast('Preset: STANDARD AUTO', 'info');
-    }
+    if (presetName === 'standard') switchCameraMode('photo');
+    else switchCameraMode(presetName);
   }
 
   function applyFilter(filterKey) {
@@ -2777,15 +2908,12 @@
       showToast(APP_STATE.isGridOn ? 'Grid 3×3 Enabled' : 'Grid Disabled', 'info', 1200);
     });
 
-    // Presets Ribbon
-    DOM.presetPills.forEach(pill => {
-      pill.addEventListener('click', () => applyPreset(pill.dataset.preset));
-    });
-
     // Mode Selector Ribbon
-    DOM.modeItems.forEach(item => {
-      item.addEventListener('click', () => switchCameraMode(item.dataset.mode));
-    });
+    if (DOM.modeItems) {
+      DOM.modeItems.forEach(item => {
+        item.addEventListener('click', () => switchCameraMode(item.dataset.mode));
+      });
+    }
 
     // Shutter / Record Button
     DOM.btnShutter.addEventListener('click', () => CaptureEngine.handleShutterPress());
@@ -2925,16 +3053,58 @@
         DOM.btnSyncRefresh.classList.add('spinning');
         showToast('Refreshing Central Vault...', 'info', 1200);
         await RemoteStorageEngine.fetchCentralMedia();
-        await RemoteStorageEngine.syncPendingQueue();
+        await RemoteStorageEngine.syncPendingQueue(true);
         DOM.btnSyncRefresh.classList.remove('spinning');
         showToast('Vault refreshed!', 'success', 1200);
       });
     }
 
-    // Auto-sync on network reconnect & window focus
+    // Cloud Token Save / Disconnect Actions
+    if (DOM.btnSaveCloudToken) {
+      DOM.btnSaveCloudToken.addEventListener('click', async () => {
+        const token = (DOM.settingGithubToken ? DOM.settingGithubToken.value : '').trim();
+        if (!token) {
+          showToast('Please paste your GitHub token', 'warn', 2000);
+          return;
+        }
+
+        DOM.btnSaveCloudToken.textContent = 'CONNECTING...';
+        try {
+          const testRes = await fetch('https://api.github.com/user', {
+            headers: { 'Authorization': `Bearer ${token}` }
+          });
+          if (testRes.ok) {
+            const userData = await testRes.json();
+            localStorage.setItem('hkc_github_token', token);
+            SettingsManager.updateCloudStatus(true);
+            showToast(`Connected: ${userData.login || 'GitHub User'}`, 'success', 2500);
+            await RemoteStorageEngine.fetchCentralMedia();
+            await RemoteStorageEngine.syncPendingQueue(true);
+          } else {
+            showToast('Invalid GitHub Token. Check permissions.', 'danger', 3000);
+          }
+        } catch (_) {
+          localStorage.setItem('hkc_github_token', token);
+          SettingsManager.updateCloudStatus(true);
+          showToast('Token saved locally', 'info', 2000);
+        } finally {
+          DOM.btnSaveCloudToken.textContent = 'CONNECT';
+        }
+      });
+    }
+
+    if (DOM.btnDisconnectCloudToken) {
+      DOM.btnDisconnectCloudToken.addEventListener('click', () => {
+        localStorage.removeItem('hkc_github_token');
+        if (DOM.settingGithubToken) DOM.settingGithubToken.value = '';
+        SettingsManager.updateCloudStatus(false);
+        showToast('Cloud storage disconnected', 'info', 2000);
+      });
+    }
+
+    // Auto-sync on network reconnect (SILENT - no startup or reconnect toast spam)
     window.addEventListener('online', () => {
-      showToast('Online: Synchronizing Central Cloud Vault...', 'info', 2000);
-      RemoteStorageEngine.syncPendingQueue();
+      RemoteStorageEngine.syncPendingQueue(false);
     });
 
     window.addEventListener('focus', () => {
@@ -3073,9 +3243,9 @@
     // Set default Photo mode on boot with full-screen 9:16 vertical viewfinder
     switchCameraMode('photo');
 
-    // Fetch and sync central cloud vault
+    // Fetch and sync central cloud vault silently
     RemoteStorageEngine.fetchCentralMedia();
-    RemoteStorageEngine.syncPendingQueue();
+    RemoteStorageEngine.syncPendingQueue(false);
 
     if ('serviceWorker' in navigator) {
       window.addEventListener('load', () => {

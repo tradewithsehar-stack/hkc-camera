@@ -1,1 +1,42 @@
-[]
+[
+  {
+    "id": "HKCCAMERA_0003",
+    "filename": "HKCCAMERA_0003.mp4",
+    "type": "video",
+    "url": "/media/videos/HKCCAMERA_0003.mp4",
+    "thumbnailUrl": "/media/thumbnails/HKCCAMERA_0003_thumb.jpg",
+    "storagePath": "H:\\hkc camera\\media\\videos\\HKCCAMERA_0003.mp4",
+    "thumbnailStoragePath": "H:\\hkc camera\\media\\thumbnails\\HKCCAMERA_0003_thumb.jpg",
+    "width": 1920,
+    "height": 1080,
+    "fps": 30,
+    "duration": "00:54",
+    "aspectRatio": "9:16",
+    "fileSize": 224061,
+    "mimeType": "video/mp4;codecs=avc1",
+    "timestamp": 1789748548774,
+    "captureDate": "2026-09-18",
+    "captureTime": "21:52:28",
+    "createdAt": "2026-09-18T16:22:28.774Z"
+  },
+  {
+    "id": "HKCCAMERA_0001",
+    "filename": "HKCCAMERA_0001.jpg",
+    "type": "photo",
+    "url": "/media/photos/HKCCAMERA_0001.jpg",
+    "thumbnailUrl": "/media/thumbnails/HKCCAMERA_0001_thumb.jpg",
+    "storagePath": "H:\\hkc camera\\media\\photos\\HKCCAMERA_0001.jpg",
+    "thumbnailStoragePath": "H:\\hkc camera\\media\\thumbnails\\HKCCAMERA_0001_thumb.jpg",
+    "width": 1920,
+    "height": 1080,
+    "fps": 30,
+    "duration": "",
+    "aspectRatio": "9:16",
+    "fileSize": 128370,
+    "mimeType": "image/jpeg",
+    "timestamp": 1789748360093,
+    "captureDate": "2026-09-18",
+    "captureTime": "21:49:20",
+    "createdAt": "2026-09-18T16:19:20.092Z"
+  }
+]

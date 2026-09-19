@@ -5,6 +5,13 @@
       "includeFiles": "{style.css,script.js,sw.js,manifest.json,icons/**,index.html}"
     }
   },
+  "rewrites": [
+    { "source": "/api/status", "destination": "/api/status.js" },
+    { "source": "/api/counter/(.*)", "destination": "/api/counter.js" },
+    { "source": "/api/media", "destination": "/api/media.js" },
+    { "source": "/api/media/(.*)", "destination": "/api/media.js" },
+    { "source": "/api/upload", "destination": "/api/upload.js" }
+  ],
   "headers": [
     {
       "source": "/(.*)",

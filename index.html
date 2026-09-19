@@ -370,13 +370,13 @@
       </div>
 
       <!-- ===================================================================
-           ZONE 3: QUICK CONTROLS & MODES (Dedicated Non-Overlapping Rows)
+           ZONE 3: QUICK CONTROLS & MODES (Single Dedicated Non-Overlapping Bar)
            =================================================================== -->
       <section class="camera-zone-controls" aria-label="Camera controls and modes">
-        <!-- Live Floating Zoom Badge -->
-        <div id="zoom-live-badge" class="zoom-live-badge" aria-live="polite">1.0×</div>
+        <!-- Live Floating Zoom Badge (Hidden by default; active only during pinch/slide) -->
+        <div id="zoom-live-badge" class="zoom-live-badge hidden" aria-live="polite">1.0×</div>
 
-        <!-- Row 3A: Dedicated Horizontal Zoom Row (Never overlaps shutter or presets) -->
+        <!-- Row 3A: Dedicated Horizontal Zoom Bar -->
         <div class="horizontal-scroll-row zoom-scroll-row" id="zoom-control-bar" aria-label="Camera Zoom Levels">
           <button type="button" class="zoom-chip" data-zoom="0.5">0.5×</button>
           <button type="button" class="zoom-chip active" data-zoom="1">1×</button>
@@ -387,22 +387,14 @@
           <span id="zoom-type-badge" class="zoom-type-badge">1.0×</span>
         </div>
 
-        <!-- Row 3B: Dedicated Horizontal Presets Row (Never wraps into multiple lines) -->
-        <div class="horizontal-scroll-row presets-scroll-row" aria-label="Quick shooting presets">
-          <button type="button" class="preset-pill active" data-preset="reels">REELS</button>
-          <button type="button" class="preset-pill" data-preset="cinematic">CINEMA</button>
-          <button type="button" class="preset-pill" data-preset="night">NIGHT</button>
-          <button type="button" class="preset-pill" data-preset="portrait">PORTRAIT</button>
-          <button type="button" class="preset-pill" data-preset="pro">PRO</button>
-          <button type="button" class="preset-pill" data-preset="standard">STANDARD</button>
-        </div>
-
-        <!-- Row 3C: Dedicated Horizontal Camera Modes Row (Never sits over shutter) -->
+        <!-- Row 3B: Single Unified Native Mode Carousel (Never overlaps or collides) -->
         <div class="horizontal-scroll-row modes-scroll-row" id="mode-ribbon" role="tablist" aria-label="Camera modes">
+          <button type="button" class="mode-item" data-mode="night" role="tab" aria-selected="false">NIGHT</button>
+          <button type="button" class="mode-item" data-mode="portrait" role="tab" aria-selected="false">PORTRAIT</button>
           <button type="button" class="mode-item active" data-mode="photo" role="tab" aria-selected="true">PHOTO</button>
           <button type="button" class="mode-item" data-mode="video" role="tab" aria-selected="false">VIDEO</button>
+          <button type="button" class="mode-item" data-mode="reels" role="tab" aria-selected="false">REELS</button>
           <button type="button" class="mode-item" data-mode="pro" role="tab" aria-selected="false">PRO</button>
-          <button type="button" class="mode-item" data-mode="portrait" role="tab" aria-selected="false">PORTRAIT</button>
           <button type="button" class="mode-item" data-mode="timelapse" role="tab" aria-selected="false">TIMELAPSE</button>
           <button type="button" class="mode-item" data-mode="slowmo" role="tab" aria-selected="false">SLOW MO</button>
         </div>
@@ -1018,6 +1010,36 @@
             <div class="setting-info">
               <span class="setting-label">Next Media Counter</span>
               <span id="storage-counter-text" class="setting-desc">HKCCAMERA_0001</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="settings-group" id="cloud-vault-settings-group">
+          <div class="group-header-with-badge">
+            <h3 class="group-title">CROSS-DEVICE CLOUD VAULT</h3>
+            <span id="cloud-sync-status-badge" class="cloud-status-badge">NOT CONNECTED</span>
+          </div>
+
+          <div class="cloud-sync-card">
+            <div class="cloud-sync-info">
+              <div class="cloud-sync-title-row">
+                <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" class="text-accent">
+                  <path d="M17.5 19H9a7 7 0 1 1 6.71-9h1.79a4.5 4.5 0 1 1 0 9Z"/>
+                </svg>
+                <strong>Cross-Device Cloud Sync</strong>
+              </div>
+              <p>Photos and videos you capture will automatically sync to GitHub repository <code>tradewithsehar-stack/hkc-camera</code>, so you can see them on any phone, PC, or browser when you login.</p>
+            </div>
+            <div class="cloud-token-input-wrap">
+              <label for="setting-github-token" class="cloud-token-label">GitHub Token (Personal Access Token):</label>
+              <div class="cloud-token-input-row">
+                <input type="password" id="setting-github-token" class="cloud-token-input" placeholder="Paste GitHub Token (ghp_...)" autocomplete="off" />
+                <button type="button" id="btn-save-cloud-token" class="btn btn-primary btn-sm">CONNECT</button>
+              </div>
+            </div>
+            <div class="cloud-token-actions">
+              <span id="cloud-token-feedback" class="cloud-token-feedback text-muted">Ready to connect cross-device storage</span>
+              <button type="button" id="btn-disconnect-cloud-token" class="btn btn-ghost btn-xs hidden">Disconnect</button>
             </div>
           </div>
         </div>
